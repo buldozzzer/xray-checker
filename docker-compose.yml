@@ -12,3 +12,9 @@ services:
       CHECK_TIMEOUT: ${CHECK_TIMEOUT:-60}
       CHECK_CONCURRENCY: ${CHECK_CONCURRENCY:-24}
       AUTO_CHECK_INTERVAL: ${AUTO_CHECK_INTERVAL:-0}
+      WATCH_CHECK_INTERVAL: ${WATCH_CHECK_INTERVAL:-43200}
+    volumes:
+      - xray-data:/app/data
+
+volumes:
+  xray-data:

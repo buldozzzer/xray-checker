@@ -39,7 +39,11 @@ h1 span { color: var(--accent); }
 .cell.slow { border-left-color: var(--slow); } .cell.bad { border-left-color: var(--bad); }
 .cell.run { border-left-color: var(--accent); animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: .55; } }
-.name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 18px; }
+.star { position: absolute; top: 6px; right: 7px; background: none; border: 0; padding: 0; cursor: pointer;
+  font-size: 15px; line-height: 1; color: var(--idle); }
+.star:hover { color: var(--accent); }
+.star.on { color: var(--accent); }
 .name .fi { margin-right: 6px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
 .proto { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .proto .p { color: var(--accent); text-transform: uppercase; font-weight: 600; }
@@ -82,6 +86,8 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
   <span id="summary"></span>
   <span>Протокол <select id="fProto"><option value="">все</option></select></span>
   <span>Поиск <input id="fText" placeholder="имя / адрес" size="14"></span>
+  <label><input type="checkbox" id="fWatched"> только ★</label>
+  <span id="watchInfo"></span>
   <span>Сортировка <select id="sort"><option value="">как в подписке</option><option value="val">по задержке</option><option value="name">по имени</option></select></span>
   <span class="legend"><i style="background:var(--good)"></i>быстро<i style="background:var(--mid)"></i>норм<i style="background:var(--slow)"></i>медленно<i style="background:var(--bad)"></i>недоступен</span>
 </div>
@@ -135,6 +141,8 @@ function title(n) {
     const r = S.results[k][n.id];
     if (r && r.state === 'done') lines.push(`${S.targets[k].label}: ` + (r.ok ? `${r.ms} ms (ttfb ${r.ttfb_ms}, HTTP ${r.status}, ${r.bytes} B)${r.ip ? ' ' + r.ip : ''}` : `${r.error}${r.detail ? ' — ' + r.detail : ''}`));
   }
+  const ts = Math.max(0, ...Object.keys(S.targets).map(k => S.results[k][n.id]?.ts || 0));
+  if (ts) lines.push('Проверено: ' + new Date(ts * 1000).toLocaleString());
   if (n.error) lines.push('xray: ' + n.error);
   return lines.join('\n') + '\n\nКлик — перепроверить';
 }
@@ -150,7 +158,9 @@ function render() {
 
   const res = S.results[target] || {};
   const q = $('#fText').value.toLowerCase();
-  let nodes = S.nodes.filter(n => (!fp.value || n.protocol === fp.value) && (!q || (n.name + n.address).toLowerCase().includes(q)));
+  const watched = new Set(S.watched);
+  const onlyW = $('#fWatched').checked;
+  let nodes = S.nodes.filter(n => (!fp.value || n.protocol === fp.value) && (!q || (n.name + n.address).toLowerCase().includes(q)) && (!onlyW || watched.has(n.name)));
   const sort = $('#sort').value;
   if (sort === 'name') nodes.sort((a, b) => a.name.localeCompare(b.name));
   if (sort === 'val') {
@@ -166,6 +176,7 @@ function render() {
       return `<div class="mini ${grade(k, rr)} ${k === target ? 'sel' : ''}">${miniVal(k, rr)}</div>`;
     }).join('');
     return `<div class="cell ${grade(target, r)}" data-id="${n.id}" title="${esc(title(n))}">
+      <button class="star ${watched.has(n.name) ? 'on' : ''}" data-name="${esc(n.name)}" title="Фоновая проверка">${watched.has(n.name) ? '★' : '☆'}</button>
       <div class="name">${nameHtml(n.name)}</div>
       <div class="proto"><span class="p">${esc(n.protocol)}</span> · ${esc(n.network)} · ${esc(n.security)} · ${esc(n.address)}</div>
       ${mainVal(target, r)}
@@ -176,6 +187,14 @@ function render() {
   const ok = done.filter(r => r.ok).length;
   $('#summary').innerHTML = `Серверов: <b>${S.nodes.length}</b> · ${esc(S.targets[target].label)}: <b style="color:var(--good)">${ok}</b> ок / <b style="color:var(--bad)">${done.length - ok}</b> недоступно` +
     (S.active ? ` · в работе: <b style="color:var(--accent)">${S.active}</b>` : '') + ` · таймаут ${S.timeout}s`;
+  const wi = $('#watchInfo');
+  if (!S.watch_interval) wi.textContent = '';
+  else {
+    const next = S.watch_last_run ? new Date((S.watch_last_run + S.watch_interval) * 1000) : null;
+    const nw = S.nodes.filter(n => watched.has(n.name)).length;
+    wi.innerHTML = `★ фон: <b>${nw}</b> раз в ${S.watch_interval / 3600} ч` +
+      (S.watch_last_run ? ` · последняя ${new Date(S.watch_last_run * 1000).toLocaleString()} · следующая ${next.toLocaleString()}` : '');
+  }
   const err = $('#err');
   err.style.display = S.load_error ? 'block' : 'none';
   err.textContent = S.load_error ? 'Ошибка загрузки подписки: ' + S.load_error : '';
@@ -190,7 +209,14 @@ async function check(targets, ids) {
 }
 
 $('#tabs').onclick = e => { const k = e.target.dataset.k; if (k) { target = k; localStorage.setItem('target', k); render(); } };
-$('#grid').onclick = e => { const c = e.target.closest('.cell'); if (c) check([target], [+c.dataset.id]); };
+$('#grid').onclick = async e => {
+  const st = e.target.closest('.star');
+  if (st) {
+    await fetch('/api/watch', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: st.dataset.name, on: !st.classList.contains('on') }) });
+    return refresh();
+  }
+  const c = e.target.closest('.cell'); if (c) check([target], [+c.dataset.id]); };
 $('#runSel').onclick = () => check([target]);
 $('#runAll').onclick = () => check(Object.keys(S.targets));
 $('#reload').onclick = async e => {
@@ -213,7 +239,7 @@ $('#reportCopy').onclick = async e => {
   e.target.textContent = 'Скопировано';
 };
 $('#reportClose').onclick = () => $('#reportDlg').close();
-['#fProto', '#sort'].forEach(s => $(s).onchange = render);
+['#fProto', '#sort', '#fWatched'].forEach(s => $(s).onchange = render);
 $('#fText').oninput = render;
 
 refresh();

@@ -1,5 +1,6 @@
 """Web service that checks availability of remnawave subscription servers through xray-core."""
 import asyncio
+import json
 import logging
 import os
 import time
@@ -20,6 +21,9 @@ BASE_PORT = int(os.getenv("XRAY_BASE_PORT", "20000"))
 TIMEOUT = float(os.getenv("CHECK_TIMEOUT", "60"))
 CONCURRENCY = int(os.getenv("CHECK_CONCURRENCY", "24"))
 AUTO_INTERVAL = int(os.getenv("AUTO_CHECK_INTERVAL", "0"))  # seconds, 0 = off
+WATCH_INTERVAL = int(os.getenv("WATCH_CHECK_INTERVAL", str(12 * 3600)))  # seconds, 0 = off
+DATA_DIR = BASE_DIR / "data"
+STATE_FILE = DATA_DIR / "state.json"
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("app")
@@ -34,9 +38,36 @@ class State:
         self.sem = asyncio.Semaphore(CONCURRENCY)
         self.lock = asyncio.Lock()
         self.tasks: set[asyncio.Task] = set()
-        workdir = BASE_DIR / "data"
-        workdir.mkdir(exist_ok=True)
-        self.xray = XrayManager(XRAY_BIN, BASE_PORT, str(workdir))
+        DATA_DIR.mkdir(exist_ok=True)
+        self.xray = XrayManager(XRAY_BIN, BASE_PORT, str(DATA_DIR))
+        # persisted across restarts; keyed by server name since node ids change on reload
+        self.saved: dict[str, dict[str, dict]] = {k: {} for k in TARGETS}
+        self.watched: set[str] = set()
+        self.watch_last_run: float | None = None
+        self._load()
+
+    def _load(self):
+        try:
+            d = json.loads(STATE_FILE.read_text())
+        except FileNotFoundError:
+            return
+        except Exception:
+            log.exception("failed to read %s", STATE_FILE)
+            return
+        for k, v in d.get("results", {}).items():
+            if k in self.saved:
+                self.saved[k] = v
+        self.watched = set(d.get("watched", []))
+        self.watch_last_run = d.get("watch_last_run")
+
+    def save(self):
+        tmp = STATE_FILE.with_suffix(".tmp")
+        tmp.write_text(json.dumps({
+            "results": self.saved,
+            "watched": sorted(self.watched),
+            "watch_last_run": self.watch_last_run,
+        }, ensure_ascii=False))
+        tmp.replace(STATE_FILE)
 
 
 state = State()
@@ -56,7 +87,7 @@ async def reload_subscription():
             state.load_error = f"{type(e).__name__}: {e}"
             raise
         state.nodes = nodes
-        state.results = {k: {} for k in TARGETS}
+        state.results = {k: {n.id: state.saved[k][n.name] for n in nodes if n.name in state.saved[k]} for k in TARGETS}
         state.loaded_at = time.time()
         state.load_error = None
         log.info("loaded %d nodes", len(nodes))
@@ -71,6 +102,8 @@ async def _check_one(node: Node, target: str):
     res.update(state="done", ts=time.time())
     if state.results.get(target) is slot:  # skip if subscription was reloaded meanwhile
         slot[node.id] = res
+        state.saved[target][node.name] = res
+        state.save()
 
 
 def schedule(node_ids: list[int] | None, targets: list[str]):
@@ -91,16 +124,35 @@ async def auto_loop():
         schedule(None, list(TARGETS))
 
 
+async def watch_loop():
+    """Checks watched servers on all targets every WATCH_INTERVAL; the schedule survives restarts."""
+    while True:
+        last = state.watch_last_run or 0
+        await asyncio.sleep(max(0.0, last + WATCH_INTERVAL - time.time()))
+        ids = [n.id for n in state.nodes if n.name in state.watched]
+        if not ids:  # nothing watched yet or subscription not loaded
+            await asyncio.sleep(60)
+            continue
+        log.info("background check of %d watched server(s)", len(ids))
+        schedule(ids, list(TARGETS))
+        state.watch_last_run = time.time()
+        state.save()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     try:
         await reload_subscription()
     except Exception:
         pass  # surfaced in /api/state; user can retry from the UI
-    bg = asyncio.create_task(auto_loop()) if AUTO_INTERVAL > 0 else None
+    bg = []
+    if AUTO_INTERVAL > 0:
+        bg.append(asyncio.create_task(auto_loop()))
+    if WATCH_INTERVAL > 0:
+        bg.append(asyncio.create_task(watch_loop()))
     yield
-    if bg:
-        bg.cancel()
+    for t in bg:
+        t.cancel()
     await state.xray.stop()
 
 
@@ -127,6 +179,9 @@ async def get_state():
         "load_error": state.load_error,
         "timeout": TIMEOUT,
         "active": len(state.tasks),
+        "watched": sorted(state.watched),
+        "watch_interval": WATCH_INTERVAL,
+        "watch_last_run": state.watch_last_run,
     }
 
 
@@ -138,6 +193,21 @@ async def check(req: CheckRequest):
     if not state.nodes:
         raise HTTPException(409, "subscription not loaded")
     return {"scheduled": schedule(req.ids, req.targets)}
+
+
+class WatchRequest(BaseModel):
+    name: str
+    on: bool
+
+
+@app.post("/api/watch")
+async def watch(req: WatchRequest):
+    if req.on:
+        state.watched.add(req.name)
+    else:
+        state.watched.discard(req.name)
+    state.save()
+    return {"watched": sorted(state.watched)}
 
 
 @app.post("/api/reload")
