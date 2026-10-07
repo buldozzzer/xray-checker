@@ -28,7 +28,7 @@ docker compose up -d --build
 3. Запускается один процесс xray: на каждый сервер свой HTTP-inbound `127.0.0.1:20000+N`, роутинг inbound → outbound. Роутинг из подписки не используется. Если xray отвергает какой-то outbound, он помечается ошибкой, остальные работают.
 4. Проверка — GET через локальный прокси, новое соединение на каждый запрос, таймаут 60 с. Время включает рукопожатие с сервером.
 
-Цели: YouTube (`/generate_204`), `proof.ovh.net/files/1Mb.dat` (показывает Мбит/с), `cp.cloudflare.com/generate_204`, `api.ipify.org` (показывает выходной IP).
+Цели: YouTube (`/generate_204`), `proof.ovh.net/files/1Mb.dat` (показывает Мбит/с), `cp.cloudflare.com/generate_204`. Проверка `api.ipify.org` (выходной IP) отключена — закомментирована в `TARGETS` в `checker.py`.
 
 ## Переменные окружения
 

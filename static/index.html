@@ -141,6 +141,7 @@ function title(n) {
 
 function render() {
   if (!S) return;
+  if (!S.targets[target]) target = Object.keys(S.targets)[0];
   $('#tabs').innerHTML = Object.entries(S.targets).map(([k, t]) =>
     `<button data-k="${k}" class="${k === target ? 'on' : ''}" title="${esc(t.url)}">${esc(t.label)}</button>`).join('');
   const protos = [...new Set(S.nodes.map(n => n.protocol))];

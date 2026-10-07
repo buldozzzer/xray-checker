@@ -30,11 +30,11 @@ TARGETS = {
         "url": "http://cp.cloudflare.com/generate_204",
         "kind": "latency",
     },
-    "ipify": {
-        "label": "ipify",
-        "url": "https://api.ipify.org?format=text",
-        "kind": "ip",
-    },
+    # "ipify": {
+    #     "label": "ipify",
+    #     "url": "https://api.ipify.org?format=text",
+    #     "kind": "ip",
+    # },
 }
 
 
