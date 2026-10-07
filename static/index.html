@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Xray Checker</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/css/flag-icons.min.css">
 <style>
 :root {
   --bg: #0d1017; --panel: #151a24; --cell: #181e2a; --border: #262e3e;
@@ -39,6 +40,7 @@ h1 span { color: var(--accent); }
 .cell.run { border-left-color: var(--accent); animation: pulse 1.2s infinite; }
 @keyframes pulse { 50% { opacity: .55; } }
 .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.name .fi { margin-right: 6px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
 .proto { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .proto .p { color: var(--accent); text-transform: uppercase; font-weight: 600; }
 .val { font-size: 20px; font-weight: 700; margin: 6px 0 2px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -51,6 +53,13 @@ h1 span { color: var(--accent); }
 .mini.slow { background: rgba(232,128,58,.18); color: #f4ac7c; } .mini.bad { background: rgba(229,72,77,.2); color: #f3878a; }
 .mini.run { color: var(--accent); }
 .mini.sel { outline: 1px solid var(--accent); }
+dialog { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
+  width: min(560px, calc(100vw - 32px)); }
+dialog::backdrop { background: rgba(0,0,0,.6); }
+dialog h2 { font-size: 15px; margin: 0 0 10px; }
+dialog textarea { width: 100%; height: 50vh; background: var(--bg); color: var(--text); border: 1px solid var(--border);
+  border-radius: 6px; padding: 8px; font: 13px/1.5 ui-monospace, monospace; resize: vertical; }
+dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
 @media (max-width: 520px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 6px 10px 20px; } header, .bar { padding-left: 10px; padding-right: 10px; } }
 </style>
 </head>
@@ -62,7 +71,13 @@ h1 span { color: var(--accent); }
   <button class="btn primary" id="runSel">Проверить</button>
   <button class="btn" id="runAll">Все цели</button>
   <button class="btn" id="reload">Обновить подписку</button>
+  <button class="btn" id="report">Сформировать отчёт</button>
 </header>
+<dialog id="reportDlg">
+  <h2 id="reportTitle"></h2>
+  <textarea id="reportText" readonly></textarea>
+  <div class="acts"><button class="btn" id="reportCopy">Копировать</button><button class="btn primary" id="reportClose">Закрыть</button></div>
+</dialog>
 <div class="bar">
   <span id="summary"></span>
   <span>Протокол <select id="fProto"><option value="">все</option></select></span>
@@ -100,6 +115,17 @@ function miniVal(key, r) {
   if (r.state !== 'done') return '…';
   if (!r.ok) return '✕';
   return S.targets[key].kind === 'download' ? r.mbps + 'M' : r.ms;
+}
+// leading emoji flag (pair of regional indicators) -> ISO code; rendered as SVG since Windows has no flag emoji
+function splitFlag(name) {
+  const m = /^\s*([\u{1F1E6}-\u{1F1FF}]{2})\s*/u.exec(name);
+  if (!m) return { cc: '', rest: name };
+  const cc = [...m[1]].map(c => String.fromCharCode(c.codePointAt(0) - 0x1F1E6 + 97)).join('');
+  return { cc, rest: name.slice(m[0].length) };
+}
+function nameHtml(name) {
+  const { cc, rest } = splitFlag(name);
+  return (cc ? `<span class="fi fi-${cc}" title="${cc.toUpperCase()}"></span>` : '') + esc(rest);
 }
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 
@@ -139,7 +165,7 @@ function render() {
       return `<div class="mini ${grade(k, rr)} ${k === target ? 'sel' : ''}">${miniVal(k, rr)}</div>`;
     }).join('');
     return `<div class="cell ${grade(target, r)}" data-id="${n.id}" title="${esc(title(n))}">
-      <div class="name">${esc(n.name)}</div>
+      <div class="name">${nameHtml(n.name)}</div>
       <div class="proto"><span class="p">${esc(n.protocol)}</span> · ${esc(n.network)} · ${esc(n.security)} · ${esc(n.address)}</div>
       ${mainVal(target, r)}
       <div class="minis">${minis}</div></div>`;
@@ -171,6 +197,21 @@ $('#reload').onclick = async e => {
   await fetch('/api/reload', { method: 'POST' });
   e.target.disabled = false; e.target.textContent = 'Обновить подписку'; refresh();
 };
+$('#report').onclick = () => {
+  if (!S) return;
+  const res = S.results[target] || {};
+  const failed = S.nodes.filter(n => { const r = res[n.id]; return r && r.state === 'done' && !r.ok; });
+  $('#reportTitle').textContent = `${S.targets[target].label}: недоступно ${failed.length}`;
+  $('#reportText').value = failed.map(n => n.name).join('\n');
+  $('#reportCopy').textContent = 'Копировать';
+  $('#reportDlg').showModal();
+};
+$('#reportCopy').onclick = async e => {
+  const t = $('#reportText');
+  try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); }
+  e.target.textContent = 'Скопировано';
+};
+$('#reportClose').onclick = () => $('#reportDlg').close();
 ['#fProto', '#sort'].forEach(s => $(s).onchange = render);
 $('#fText').oninput = render;
 
