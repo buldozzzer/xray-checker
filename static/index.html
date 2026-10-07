@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Xray Checker</title>
+<style>
+:root {
+  --bg: #0d1017; --panel: #151a24; --cell: #181e2a; --border: #262e3e;
+  --text: #e6e9ef; --muted: #8a93a6; --accent: #ffcc00;
+  --good: #2fbf71; --mid: #e5b72e; --slow: #e8803a; --bad: #e5484d; --idle: #3a4356;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { position: sticky; top: 0; z-index: 5; background: rgba(13,16,23,.95); backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
+h1 span { color: var(--accent); }
+.tabs { display: flex; gap: 4px; background: var(--panel); padding: 3px; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
+.tabs button { background: none; border: 0; color: var(--muted); padding: 6px 12px; border-radius: 6px; cursor: pointer; font: inherit; }
+.tabs button.on { background: var(--accent); color: #111; font-weight: 600; }
+.btn { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 7px 12px;
+  border-radius: 7px; cursor: pointer; font: inherit; }
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+.spacer { flex: 1; }
+.bar { padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; color: var(--muted); font-size: 13px; }
+.bar b { color: var(--text); }
+.bar select, .bar input { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; }
+.legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 4px 0 10px; vertical-align: -1px; }
+.err { margin: 0 16px 10px; padding: 10px 12px; background: #3a1418; border: 1px solid var(--bad); border-radius: 8px; display: none; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; padding: 6px 16px 24px; }
+.cell { background: var(--cell); border: 1px solid var(--border); border-left: 4px solid var(--idle);
+  border-radius: 8px; padding: 9px 10px 8px; cursor: pointer; position: relative; min-width: 0; transition: border-color .15s; }
+.cell:hover { border-color: var(--accent); }
+.cell.good { border-left-color: var(--good); } .cell.mid { border-left-color: var(--mid); }
+.cell.slow { border-left-color: var(--slow); } .cell.bad { border-left-color: var(--bad); }
+.cell.run { border-left-color: var(--accent); animation: pulse 1.2s infinite; }
+@keyframes pulse { 50% { opacity: .55; } }
+.name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proto { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proto .p { color: var(--accent); text-transform: uppercase; font-weight: 600; }
+.val { font-size: 20px; font-weight: 700; margin: 6px 0 2px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.val small { font-size: 12px; color: var(--muted); font-weight: 500; }
+.val.e { font-size: 14px; color: var(--bad); }
+.minis { display: flex; gap: 4px; margin-top: 4px; }
+.mini { flex: 1; font-size: 10px; text-align: center; padding: 2px 0; border-radius: 4px; background: #222a39; color: var(--muted);
+  white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
+.mini.good { background: rgba(47,191,113,.18); color: #7fe0a9; } .mini.mid { background: rgba(229,183,46,.18); color: #f0d27a; }
+.mini.slow { background: rgba(232,128,58,.18); color: #f4ac7c; } .mini.bad { background: rgba(229,72,77,.2); color: #f3878a; }
+.mini.run { color: var(--accent); }
+.mini.sel { outline: 1px solid var(--accent); }
+@media (max-width: 520px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 6px 10px 20px; } header, .bar { padding-left: 10px; padding-right: 10px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>⬢</span> Xray Checker</h1>
+  <div class="tabs" id="tabs"></div>
+  <div class="spacer"></div>
+  <button class="btn primary" id="runSel">Проверить</button>
+  <button class="btn" id="runAll">Все цели</button>
+  <button class="btn" id="reload">Обновить подписку</button>
+</header>
+<div class="bar">
+  <span id="summary"></span>
+  <span>Протокол <select id="fProto"><option value="">все</option></select></span>
+  <span>Поиск <input id="fText" placeholder="имя / адрес" size="14"></span>
+  <span>Сортировка <select id="sort"><option value="">как в подписке</option><option value="val">по задержке</option><option value="name">по имени</option></select></span>
+  <span class="legend"><i style="background:var(--good)"></i>быстро<i style="background:var(--mid)"></i>норм<i style="background:var(--slow)"></i>медленно<i style="background:var(--bad)"></i>недоступен</span>
+</div>
+<div class="err" id="err"></div>
+<div class="grid" id="grid"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let S = null, target = localStorage.getItem('target') || 'cloudflare';
+
+// thresholds in ms (latency) or Mbit/s (download)
+const grade = (key, r) => {
+  if (!r || r.state !== 'done') return r && r.state ? 'run' : '';
+  if (!r.ok) return 'bad';
+  if (S.targets[key].kind === 'download') return r.mbps >= 20 ? 'good' : r.mbps >= 5 ? 'mid' : 'slow';
+  return r.ms < 500 ? 'good' : r.ms < 1500 ? 'mid' : 'slow';
+};
+const fmt = ms => ms >= 10000 ? (ms / 1000).toFixed(1) + ' s' : ms + ' ms';
+function mainVal(key, r) {
+  if (!r) return '<div class="val"><small>—</small></div>';
+  if (r.state === 'queued') return '<div class="val"><small>в очереди…</small></div>';
+  if (r.state === 'running') return `<div class="val"><small>проверка ${Math.round(Date.now()/1000 - r.started)}s…</small></div>`;
+  if (!r.ok) return `<div class="val e">✕ ${esc(r.error || 'ошибка')}</div>`;
+  const kind = S.targets[key].kind;
+  if (kind === 'download') return `<div class="val">${r.mbps} <small>Mbit/s · ${fmt(r.ms)}</small></div>`;
+  if (kind === 'ip') return `<div class="val">${fmt(r.ms)} <small>${esc(r.ip)}</small></div>`;
+  return `<div class="val">${fmt(r.ms)} <small>ttfb ${r.ttfb_ms}</small></div>`;
+}
+function miniVal(key, r) {
+  if (!r) return '·';
+  if (r.state !== 'done') return '…';
+  if (!r.ok) return '✕';
+  return S.targets[key].kind === 'download' ? r.mbps + 'M' : r.ms;
+}
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function title(n) {
+  const lines = [n.name, `${n.protocol} · ${n.network} · ${n.security}`, `${n.address}:${n.port}`, `local proxy 127.0.0.1:${n.port_local}`];
+  for (const k in S.targets) {
+    const r = S.results[k][n.id];
+    if (r && r.state === 'done') lines.push(`${S.targets[k].label}: ` + (r.ok ? `${r.ms} ms (ttfb ${r.ttfb_ms}, HTTP ${r.status}, ${r.bytes} B)${r.ip ? ' ' + r.ip : ''}` : `${r.error}${r.detail ? ' — ' + r.detail : ''}`));
+  }
+  if (n.error) lines.push('xray: ' + n.error);
+  return lines.join('\n') + '\n\nКлик — перепроверить';
+}
+
+function render() {
+  if (!S) return;
+  $('#tabs').innerHTML = Object.entries(S.targets).map(([k, t]) =>
+    `<button data-k="${k}" class="${k === target ? 'on' : ''}" title="${esc(t.url)}">${esc(t.label)}</button>`).join('');
+  const protos = [...new Set(S.nodes.map(n => n.protocol))];
+  const fp = $('#fProto');
+  if (fp.options.length - 1 !== protos.length) fp.innerHTML = '<option value="">все</option>' + protos.map(p => `<option>${p}</option>`).join('');
+
+  const res = S.results[target] || {};
+  const q = $('#fText').value.toLowerCase();
+  let nodes = S.nodes.filter(n => (!fp.value || n.protocol === fp.value) && (!q || (n.name + n.address).toLowerCase().includes(q)));
+  const sort = $('#sort').value;
+  if (sort === 'name') nodes.sort((a, b) => a.name.localeCompare(b.name));
+  if (sort === 'val') {
+    const kind = S.targets[target].kind;
+    const v = n => { const r = res[n.id]; if (!r || r.state !== 'done') return 1e9; if (!r.ok) return 1e8; return kind === 'download' ? -r.mbps : r.ms; };
+    nodes.sort((a, b) => v(a) - v(b));
+  }
+
+  $('#grid').innerHTML = nodes.map(n => {
+    const r = res[n.id];
+    const minis = Object.keys(S.targets).map(k => {
+      const rr = S.results[k][n.id];
+      return `<div class="mini ${grade(k, rr)} ${k === target ? 'sel' : ''}">${miniVal(k, rr)}</div>`;
+    }).join('');
+    return `<div class="cell ${grade(target, r)}" data-id="${n.id}" title="${esc(title(n))}">
+      <div class="name">${esc(n.name)}</div>
+      <div class="proto"><span class="p">${esc(n.protocol)}</span> · ${esc(n.network)} · ${esc(n.security)} · ${esc(n.address)}</div>
+      ${mainVal(target, r)}
+      <div class="minis">${minis}</div></div>`;
+  }).join('');
+
+  const all = Object.values(res), done = all.filter(r => r.state === 'done');
+  const ok = done.filter(r => r.ok).length;
+  $('#summary').innerHTML = `Серверов: <b>${S.nodes.length}</b> · ${esc(S.targets[target].label)}: <b style="color:var(--good)">${ok}</b> ок / <b style="color:var(--bad)">${done.length - ok}</b> недоступно` +
+    (S.active ? ` · в работе: <b style="color:var(--accent)">${S.active}</b>` : '') + ` · таймаут ${S.timeout}s`;
+  const err = $('#err');
+  err.style.display = S.load_error ? 'block' : 'none';
+  err.textContent = S.load_error ? 'Ошибка загрузки подписки: ' + S.load_error : '';
+}
+
+async function refresh() {
+  try { S = await (await fetch('/api/state')).json(); render(); } catch (e) {}
+}
+async function check(targets, ids) {
+  await fetch('/api/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ targets, ids }) });
+  refresh();
+}
+
+$('#tabs').onclick = e => { const k = e.target.dataset.k; if (k) { target = k; localStorage.setItem('target', k); render(); } };
+$('#grid').onclick = e => { const c = e.target.closest('.cell'); if (c) check([target], [+c.dataset.id]); };
+$('#runSel').onclick = () => check([target]);
+$('#runAll').onclick = () => check(Object.keys(S.targets));
+$('#reload').onclick = async e => {
+  e.target.disabled = true; e.target.textContent = 'Загрузка…';
+  await fetch('/api/reload', { method: 'POST' });
+  e.target.disabled = false; e.target.textContent = 'Обновить подписку'; refresh();
+};
+['#fProto', '#sort'].forEach(s => $(s).onchange = render);
+$('#fText').oninput = render;
+
+refresh();
+setInterval(refresh, 1000);
+</script>
+</body>
+</html>

@@ -1,0 +1,6 @@
+bin/
+data/
+__pycache__/
+*.pyc
+.git
+.env

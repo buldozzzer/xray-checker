@@ -1,0 +1,14 @@
+services:
+  xray-checker:
+    build: .
+    image: xray-checker:latest
+    container_name: xray-checker
+    restart: unless-stopped
+    ports:
+      - "${HOST_PORT:-8090}:8080"
+    environment:
+      SUB_URL: ${SUB_URL:?set SUB_URL in .env}
+      SUB_USER_AGENT: ${SUB_USER_AGENT:-Happ/5.6.0/ios/2608171408551}
+      CHECK_TIMEOUT: ${CHECK_TIMEOUT:-60}
+      CHECK_CONCURRENCY: ${CHECK_CONCURRENCY:-24}
+      AUTO_CHECK_INTERVAL: ${AUTO_CHECK_INTERVAL:-0}
