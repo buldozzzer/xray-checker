@@ -18,7 +18,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl unzip ca-c
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY checker.py app.py ./
+COPY checker.py app.py history.py ./
 COPY static ./static
 
 ENV XRAY_BIN=/usr/local/bin/xray \

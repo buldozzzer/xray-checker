@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from checker import TARGETS, Node, XrayManager, fetch_subscription, probe
+from history import History
 
 BASE_DIR = Path(__file__).parent
 SUB_URL = os.getenv("SUB_URL", "")
@@ -24,6 +25,7 @@ AUTO_INTERVAL = int(os.getenv("AUTO_CHECK_INTERVAL", "0"))  # seconds, 0 = off
 WATCH_INTERVAL = int(os.getenv("WATCH_CHECK_INTERVAL", str(12 * 3600)))  # seconds, 0 = off
 DATA_DIR = BASE_DIR / "data"
 STATE_FILE = DATA_DIR / "state.json"
+HISTORY_DAYS = int(os.getenv("HISTORY_DAYS", "90"))  # 0 = keep forever
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("app")
@@ -40,6 +42,7 @@ class State:
         self.tasks: set[asyncio.Task] = set()
         DATA_DIR.mkdir(exist_ok=True)
         self.xray = XrayManager(XRAY_BIN, BASE_PORT, str(DATA_DIR))
+        self.history = History(str(DATA_DIR / "history.db"), HISTORY_DAYS)
         # persisted across restarts; keyed by server name since node ids change on reload
         self.saved: dict[str, dict[str, dict]] = {k: {} for k in TARGETS}
         self.watched: set[str] = set()
@@ -93,7 +96,7 @@ async def reload_subscription():
         log.info("loaded %d nodes", len(nodes))
 
 
-async def _check_one(node: Node, target: str):
+async def _check_one(node: Node, target: str, source: str):
     slot = state.results[target]
     slot[node.id] = {"state": "queued"}
     async with state.sem:
@@ -104,15 +107,16 @@ async def _check_one(node: Node, target: str):
         slot[node.id] = res
         state.saved[target][node.name] = res
         state.save()
+        state.history.add(node.name, target, source, res)
 
 
-def schedule(node_ids: list[int] | None, targets: list[str]):
+def schedule(node_ids: list[int] | None, targets: list[str], source: str = "manual"):
     nodes = state.nodes if node_ids is None else [n for n in state.nodes if n.id in set(node_ids)]
     for target in targets:
         for n in nodes:
             if state.results[target].get(n.id, {}).get("state") in ("queued", "running"):
                 continue
-            t = asyncio.create_task(_check_one(n, target))
+            t = asyncio.create_task(_check_one(n, target, source))
             state.tasks.add(t)
             t.add_done_callback(state.tasks.discard)
     return len(nodes) * len(targets)
@@ -121,7 +125,7 @@ def schedule(node_ids: list[int] | None, targets: list[str]):
 async def auto_loop():
     while True:
         await asyncio.sleep(AUTO_INTERVAL)
-        schedule(None, list(TARGETS))
+        schedule(None, list(TARGETS), "auto")
 
 
 async def watch_loop():
@@ -134,7 +138,8 @@ async def watch_loop():
             await asyncio.sleep(60)
             continue
         log.info("background check of %d watched server(s)", len(ids))
-        schedule(ids, list(TARGETS))
+        schedule(ids, list(TARGETS), "watch")
+        state.history.prune()
         state.watch_last_run = time.time()
         state.save()
 
@@ -182,7 +187,13 @@ async def get_state():
         "watched": sorted(state.watched),
         "watch_interval": WATCH_INTERVAL,
         "watch_last_run": state.watch_last_run,
+        "recent": state.history.recent_for([n.name for n in state.nodes]),
     }
+
+
+@app.get("/api/history")
+async def history(name: str, days: float = 30):
+    return state.history.server(name, days)
 
 
 @app.post("/api/check")
