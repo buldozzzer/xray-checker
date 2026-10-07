@@ -84,6 +84,25 @@ dialog h2 { font-size: 15px; margin: 0 0 10px; }
 dialog textarea { width: 100%; height: 50vh; background: var(--bg); color: var(--text); border: 1px solid var(--border);
   border-radius: 6px; padding: 8px; font: 13px/1.5 ui-monospace, monospace; resize: vertical; }
 dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; }
+/* list view: same cells laid out as table rows */
+.grid.list, .lhead { --cols: 18px 18px minmax(170px, 1.6fr) minmax(150px, 1.3fr) minmax(130px, 1fr) minmax(170px, 1.2fr) minmax(90px, 140px); }
+.grid.list { grid-template-columns: 1fr; gap: 4px; padding-top: 0; }
+.grid.list .cell, .lhead { display: grid; grid-template-columns: var(--cols); gap: 10px; align-items: center; padding: 6px 10px; }
+.grid.list .hist, .grid.list .star { position: static; }
+.grid.list .name, .grid.list .proto, .grid.list .val, .grid.list .minis, .grid.list .strip { margin: 0; padding-right: 0; }
+.grid.list .val { font-size: 15px; }
+.grid.list .strip { height: 8px; }
+.lhead { display: none; margin: 0 16px 4px; border-left: 4px solid transparent; color: var(--muted); font-size: 12px; }
+.lhead.on { display: grid; }
+.lhead .mh { display: flex; gap: 4px; } .lhead .mh span { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (hover: hover) { .grid.list .cell:hover { transform: scale(1.015); } }
+.view { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; vertical-align: middle; }
+.view button { background: var(--panel); color: var(--muted); border: 0; padding: 4px 10px; cursor: pointer; font: inherit; }
+.view button.on { background: var(--accent); color: #111; font-weight: 600; }
+@media (max-width: 760px) {
+  .grid.list, .lhead { --cols: 18px 18px minmax(0, 1fr) 110px; }
+  .grid.list .proto, .grid.list .minis, .grid.list .strip, .lhead .hp, .lhead .mh, .lhead .hs { display: none; }
+}
 @media (max-width: 520px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 6px 10px 20px; } header, .bar { padding-left: 10px; padding-right: 10px; } }
 </style>
 </head>
@@ -103,6 +122,7 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
   <div class="acts"><button class="btn" id="reportCopy">Копировать</button><button class="btn primary" id="reportClose">Закрыть</button></div>
 </dialog>
 <div class="bar">
+  <span class="view" id="view"><button data-v="grid" title="Матрица">▦ Матрица</button><button data-v="list" title="Список">☰ Список</button></span>
   <span id="summary"></span>
   <span>Протокол <select id="fProto"><option value="">все</option></select></span>
   <span>Поиск <input id="fText" placeholder="имя / адрес" size="14"></span>
@@ -123,12 +143,14 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
   <div class="acts"><button class="btn primary" id="histClose">Закрыть</button></div>
 </dialog>
 <div class="err" id="err"></div>
+<div class="lhead" id="lhead"></div>
 <div class="grid" id="grid"></div>
 
 <script>
 const $ = s => document.querySelector(s);
 const cells = new Map();
 let S = null, target = localStorage.getItem('target') || 'cloudflare';
+let view = localStorage.getItem('view') === 'list' ? 'list' : 'grid';
 
 // thresholds in ms (latency) or Mbit/s (download)
 const grade = (key, r) => {
@@ -232,6 +254,13 @@ function render() {
     nodes.sort((a, b) => v(a) - v(b));
   }
 
+  $('#view').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
+  $('#grid').classList.toggle('list', view === 'list');
+  const lh = $('#lhead');
+  lh.classList.toggle('on', view === 'list');
+  const lhHtml = `<span></span><span></span><span>Сервер</span><span class="hp">Протокол · адрес</span><span>${esc(S.targets[target].label)}</span>` +
+    `<span class="mh">${Object.values(S.targets).map(t => `<span>${esc(t.label)}</span>`).join('')}</span><span class="hs">Последние проверки</span>`;
+  if (lh._html !== lhHtml) { lh.innerHTML = lhHtml; lh._html = lhHtml; }
   // keep cell elements alive between refreshes so hover zoom doesn't restart every second
   const grid = $('#grid'), keep = new Set();
   nodes.forEach((n, i) => {
@@ -283,6 +312,7 @@ async function check(targets, ids) {
   refresh();
 }
 
+$('#view').onclick = e => { const v = e.target.dataset.v; if (v) { view = v; localStorage.setItem('view', v); render(); } };
 $('#tabs').onclick = e => { const k = e.target.dataset.k; if (k) { target = k; localStorage.setItem('target', k); render(); } };
 $('#grid').onclick = async e => {
   const h = e.target.closest('.hist');
