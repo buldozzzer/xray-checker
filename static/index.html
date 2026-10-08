@@ -124,6 +124,7 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
 <div class="bar">
   <span class="view" id="view"><button data-v="grid" title="Матрица">▦ Матрица</button><button data-v="list" title="Список">☰ Список</button></span>
   <span id="summary"></span>
+  <span class="view" id="fStatus"><button data-s="" title="Все серверы">все</button><button data-s="ok" title="Последняя проверка выбранной цели успешна">✓ рабочие</button><button data-s="bad" title="Последняя проверка выбранной цели неуспешна">✕ нерабочие</button><button data-s="none" title="Ещё не проверены или проверяются сейчас">не проверены</button></span>
   <span>Протокол <select id="fProto"><option value="">все</option></select></span>
   <span>Поиск <input id="fText" placeholder="имя / адрес" size="14"></span>
   <label><input type="checkbox" id="fWatched"> только ★</label>
@@ -151,6 +152,9 @@ const $ = s => document.querySelector(s);
 const cells = new Map();
 let S = null, target = localStorage.getItem('target') || 'cloudflare';
 let view = localStorage.getItem('view') === 'list' ? 'list' : 'grid';
+let status = localStorage.getItem('status') || '';
+// status of a node for the selected target: ok / bad / none (not checked yet or in progress)
+const nodeStatus = r => !r || r.state !== 'done' ? 'none' : r.ok ? 'ok' : 'bad';
 
 // thresholds in ms (latency) or Mbit/s (download)
 const grade = (key, r) => {
@@ -246,6 +250,14 @@ function render() {
   const watched = new Set(S.watched);
   const onlyW = $('#fWatched').checked;
   let nodes = S.nodes.filter(n => (!fp.value || n.protocol === fp.value) && (!q || (n.name + n.address).toLowerCase().includes(q)) && (!onlyW || watched.has(n.name)));
+  const counts = { '': nodes.length, ok: 0, bad: 0, none: 0 };
+  nodes.forEach(n => counts[nodeStatus(res[n.id])]++);
+  $('#fStatus').querySelectorAll('button').forEach(b => {
+    b.classList.toggle('on', b.dataset.s === status);
+    const t = b.textContent.replace(/ \(\d+\)$/, '') + ` (${counts[b.dataset.s]})`;
+    if (b.textContent !== t) b.textContent = t;
+  });
+  if (status) nodes = nodes.filter(n => nodeStatus(res[n.id]) === status);
   const sort = $('#sort').value;
   if (sort === 'name') nodes.sort((a, b) => a.name.localeCompare(b.name));
   if (sort === 'val') {
@@ -313,6 +325,7 @@ async function check(targets, ids) {
 }
 
 $('#view').onclick = e => { const v = e.target.dataset.v; if (v) { view = v; localStorage.setItem('view', v); render(); } };
+$('#fStatus').onclick = e => { const b = e.target.closest('button'); if (b) { status = b.dataset.s; localStorage.setItem('status', status); render(); } };
 $('#tabs').onclick = e => { const k = e.target.dataset.k; if (k) { target = k; localStorage.setItem('target', k); render(); } };
 $('#grid').onclick = async e => {
   const h = e.target.closest('.hist');
