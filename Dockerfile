@@ -3,7 +3,7 @@ FROM python:3.11-slim
 ARG XRAY_VERSION=v26.3.27
 ARG TARGETARCH=amd64
 
-RUN apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates \
+RUN apt-get update && apt-get install -y --no-install-recommends curl unzip ca-certificates iputils-ping \
     && case "$TARGETARCH" in \
          amd64) XARCH=64 ;; \
          arm64) XARCH=arm64-v8a ;; \

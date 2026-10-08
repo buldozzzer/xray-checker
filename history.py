@@ -12,6 +12,8 @@ class History:
         self.db.execute("""CREATE TABLE IF NOT EXISTS checks (
             ts REAL NOT NULL, name TEXT NOT NULL, target TEXT NOT NULL, source TEXT NOT NULL,
             ok INTEGER NOT NULL, ms INTEGER, mbps REAL, error TEXT)""")
+        if "loss" not in {r[1] for r in self.db.execute("PRAGMA table_info(checks)")}:
+            self.db.execute("ALTER TABLE checks ADD COLUMN loss REAL")  # ping packet loss, %
         self.db.execute("CREATE INDEX IF NOT EXISTS checks_name_ts ON checks (name, ts)")
         self.retention_days = retention_days
         self.prune()
@@ -21,8 +23,10 @@ class History:
             self.recent[name][target].append([ts, ok])
 
     def add(self, name: str, target: str, source: str, res: dict):
-        self.db.execute("INSERT INTO checks VALUES (?,?,?,?,?,?,?,?)", (
-            res["ts"], name, target, source, int(res["ok"]), res.get("ms"), res.get("mbps"), res.get("error")))
+        self.db.execute(
+            "INSERT INTO checks (ts, name, target, source, ok, ms, mbps, error, loss) VALUES (?,?,?,?,?,?,?,?,?)", (
+                res["ts"], name, target, source, int(res["ok"]), res.get("ms"), res.get("mbps"), res.get("error"),
+                res.get("loss")))
         self.db.commit()
         self.recent[name][target].append([res["ts"], int(res["ok"])])
 
@@ -39,9 +43,9 @@ class History:
     def server(self, name: str, days: float) -> dict:
         since = time.time() - days * 86400
         rows = self.db.execute(
-            "SELECT ts, target, source, ok, ms, mbps, error FROM checks WHERE name = ? AND ts >= ? ORDER BY ts DESC",
+            "SELECT ts, target, source, ok, ms, mbps, error, loss FROM checks WHERE name = ? AND ts >= ? ORDER BY ts DESC",
             (name, since)).fetchall()
-        checks = [dict(zip(("ts", "target", "source", "ok", "ms", "mbps", "error"), r)) for r in rows]
+        checks = [dict(zip(("ts", "target", "source", "ok", "ms", "mbps", "error", "loss"), r)) for r in rows]
         uptime = {}
         for label, d in (("24h", 1), ("7d", 7), ("30d", 30)):
             t0 = time.time() - d * 86400

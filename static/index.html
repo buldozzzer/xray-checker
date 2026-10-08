@@ -153,6 +153,7 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
   <h2 id="histTitle"></h2>
   <div class="hbar">Доступность (успешных проверок)</div>
   <div id="histUptime"></div>
+  <div id="histChart"></div>
   <div class="hbar" style="margin-top:14px">Проверки
     <select id="histTarget"><option value="">все цели</option></select>
     <select id="histDays"><option value="1">24 ч</option><option value="7">7 дней</option><option value="30" selected>30 дней</option><option value="90">90 дней</option></select>
@@ -173,11 +174,13 @@ let status = localStorage.getItem('status') || '';
 // status of a node for the selected target: ok / bad / none (not checked yet or in progress)
 const nodeStatus = r => !r || r.state !== 'done' ? 'none' : r.ok ? 'ok' : 'bad';
 
-// thresholds in ms (latency) or Mbit/s (download)
+// thresholds in ms (latency, ping) or Mbit/s (download)
 const grade = (key, r) => {
   if (!r || r.state !== 'done') return r && r.state ? 'run' : '';
   if (!r.ok) return 'bad';
-  if (S.targets[key].kind === 'download') return r.mbps >= 20 ? 'good' : r.mbps >= 5 ? 'mid' : 'slow';
+  const kind = S.targets[key].kind;
+  if (kind === 'download') return r.mbps >= 20 ? 'good' : r.mbps >= 5 ? 'mid' : 'slow';
+  if (kind === 'ping') return r.ms >= 300 || r.loss >= 50 ? 'slow' : r.ms >= 100 || r.loss > 0 ? 'mid' : 'good';
   return r.ms < 500 ? 'good' : r.ms < 1500 ? 'mid' : 'slow';
 };
 const fmt = ms => ms >= 10000 ? (ms / 1000).toFixed(1) + ' s' : ms + ' ms';
@@ -188,6 +191,7 @@ function mainVal(key, r) {
   if (!r.ok) return `<div class="val e">✕ ${esc(r.error || 'ошибка')}</div>`;
   const kind = S.targets[key].kind;
   if (kind === 'download') return `<div class="val">${r.mbps} <small>Mbit/s · ${fmt(r.ms)}</small></div>`;
+  if (kind === 'ping') return `<div class="val">${fmt(r.ms)} <small>${r.method} ${r.min_ms}–${r.max_ms}${r.loss ? ` · потери ${r.loss}%` : ''}</small></div>`;
   if (kind === 'ip') return `<div class="val">${fmt(r.ms)} <small>${esc(r.ip)}</small></div>`;
   return `<div class="val">${fmt(r.ms)} <small>ttfb ${r.ttfb_ms}</small></div>`;
 }
@@ -214,7 +218,9 @@ function title(n) {
   const lines = [n.name, `${n.protocol} · ${n.network} · ${n.security}`, `${n.address}:${n.port}`, `local proxy 127.0.0.1:${n.port_local}`];
   for (const k in S.targets) {
     const r = S.results[k][n.id];
-    if (r && r.state === 'done') lines.push(`${S.targets[k].label}: ` + (r.ok ? `${r.ms} ms (ttfb ${r.ttfb_ms}, HTTP ${r.status}, ${r.bytes} B)${r.ip ? ' ' + r.ip : ''}` : `${r.error}${r.detail ? ' — ' + r.detail : ''}`));
+    if (r && r.state === 'done' && S.targets[k].kind === 'ping') lines.push(`${S.targets[k].label} (${r.method}): ` + (r.ok
+      ? `${r.ms} ms (min ${r.min_ms}, max ${r.max_ms}, ${r.recv}/${r.sent}, потери ${r.loss}%)` : `${r.error}${r.detail ? ' — ' + r.detail : ''}`));
+    else if (r && r.state === 'done') lines.push(`${S.targets[k].label}: ` + (r.ok ? `${r.ms} ms (ttfb ${r.ttfb_ms}, HTTP ${r.status}, ${r.bytes} B)${r.ip ? ' ' + r.ip : ''}` : `${r.error}${r.detail ? ' — ' + r.detail : ''}`));
   }
   const ts = Math.max(0, ...Object.keys(S.targets).map(k => S.results[k][n.id]?.ts || 0));
   if (ts) lines.push('Проверено: ' + new Date(ts * 1000).toLocaleString());
@@ -247,17 +253,35 @@ async function loadHistory() {
   const tf = $('#histTarget').value;
   const src = { manual: 'вручную', watch: 'фон ★', auto: 'авто' };
   const rows = H.checks.filter(c => !tf || c.target === tf);
+  $('#histChart').innerHTML = pingChart(H.checks.filter(c => S.targets[c.target]?.kind === 'ping').reverse());
   $('#histChecks').innerHTML = rows.length ? `<table class="htable"><tr><th>Время</th><th>Цель</th><th>Запуск</th><th>Результат</th></tr>` +
     rows.map(c => `<tr><td>${new Date(c.ts * 1000).toLocaleString()}</td><td>${esc(S.targets[c.target]?.label || c.target)}</td><td>${src[c.source] || c.source}</td>` +
-      (c.ok ? `<td class="ok">✓ ${c.mbps != null ? c.mbps + ' Mbit/s · ' : ''}${fmt(c.ms)}</td>` : `<td class="bad">✕ ${esc(c.error || 'ошибка')}</td>`) + '</tr>').join('') +
+      (c.ok ? `<td class="ok">✓ ${c.mbps != null ? c.mbps + ' Mbit/s · ' : ''}${fmt(c.ms)}${c.loss ? ` · потери ${c.loss}%` : ''}</td>` : `<td class="bad">✕ ${esc(c.error || 'ошибка')}</td>`) + '</tr>').join('') +
     '</table>' : '<div style="color:var(--muted)">Нет проверок за период</div>';
+}
+
+// ping RTT over the selected period; failed pings drawn as red ticks at the bottom
+function pingChart(pts) {
+  if (pts.length < 2) return '';
+  const W = 720, H = 120, P = 4, t0 = pts[0].ts, t1 = pts[pts.length - 1].ts || t0 + 1;
+  const okp = pts.filter(c => c.ok), max = Math.max(50, ...okp.map(c => c.ms)) * 1.1;
+  const x = ts => P + (W - 2 * P) * (ts - t0) / (t1 - t0 || 1), y = ms => H - P - (H - 2 * P) * ms / max;
+  const line = okp.map(c => `${x(c.ts).toFixed(1)},${y(c.ms).toFixed(1)}`).join(' ');
+  const fails = pts.filter(c => !c.ok).map(c => `<line x1="${x(c.ts)}" x2="${x(c.ts)}" y1="${H - P}" y2="${H - P - 10}" stroke="var(--bad)" stroke-width="2"><title>${new Date(c.ts * 1000).toLocaleString()}: ${esc(c.error)}</title></line>`).join('');
+  const dots = okp.map(c => `<circle cx="${x(c.ts)}" cy="${y(c.ms)}" r="2.5" fill="${c.loss ? 'var(--mid)' : 'var(--good)'}"><title>${new Date(c.ts * 1000).toLocaleString()}: ${c.ms} ms${c.loss ? ', потери ' + c.loss + '%' : ''}</title></circle>`).join('');
+  const ms = okp.map(c => c.ms);
+  const stat = ms.length ? `мин ${Math.min(...ms)} · сред ${Math.round(ms.reduce((a, b) => a + b, 0) / ms.length)} · макс ${Math.max(...ms)} ms` : '';
+  return `<div class="hbar" style="margin-top:14px">Пинг · ${pts.length} проверок · ${stat}</div>
+    <svg viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;background:var(--bg);border:1px solid var(--border);border-radius:6px">
+      <text x="${P + 2}" y="14" fill="var(--muted)" font-size="11">${Math.round(max)} ms</text>
+      <polyline points="${line}" fill="none" stroke="var(--accent)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>${dots}${fails}</svg>`;
 }
 
 function render() {
   if (!S) return;
   if (!S.targets[target]) target = Object.keys(S.targets)[0];
   $('#tabs').innerHTML = Object.entries(S.targets).map(([k, t]) =>
-    `<button data-k="${k}" class="${k === target ? 'on' : ''}" title="${esc(t.url)}">${esc(t.label)}</button>`).join('');
+    `<button data-k="${k}" class="${k === target ? 'on' : ''}" title="${esc(t.url || 'Пинг до адреса сервера напрямую (TCP, для UDP-протоколов ICMP)')}">${esc(t.label)}</button>`).join('');
   const protos = [...new Set(S.nodes.map(n => n.protocol))];
   const fp = $('#fProto');
   if (fp.options.length - 1 !== protos.length) fp.innerHTML = '<option value="">все</option>' + protos.map(p => `<option>${p}</option>`).join('');

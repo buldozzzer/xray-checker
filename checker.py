@@ -4,6 +4,9 @@ import copy
 import json
 import logging
 import os
+import re
+import socket
+import statistics
 import tempfile
 import time
 from dataclasses import dataclass, field, asdict
@@ -30,12 +33,24 @@ TARGETS = {
         "url": "http://cp.cloudflare.com/generate_204",
         "kind": "latency",
     },
+    "ping": {
+        "label": "Ping",
+        "url": "",  # direct to the server's address:port, not through xray
+        "kind": "ping",
+    },
     # "ipify": {
     #     "label": "ipify",
     #     "url": "https://api.ipify.org?format=text",
     #     "kind": "ip",
     # },
 }
+
+
+PING_COUNT = int(os.getenv("PING_COUNT", "4"))
+PING_TIMEOUT = float(os.getenv("PING_TIMEOUT", "3"))  # seconds per attempt
+# TCP connect can't reach these: they listen on UDP only, so ICMP is used instead
+UDP_PROTOCOLS = {"hysteria", "hysteria2", "tuic", "wireguard"}
+UDP_NETWORKS = {"kcp", "mkcp", "quic"}
 
 
 @dataclass
@@ -181,9 +196,67 @@ class XrayManager:
         self.proc = None
 
 
+def _ping_result(rtts: list[float], sent: int, method: str) -> dict:
+    res = {"method": method, "sent": sent, "recv": len(rtts), "loss": round(100 * (sent - len(rtts)) / sent, 1)}
+    if not rtts:
+        return {**res, "ok": False, "error": f"{method} timeout" if method == "icmp" else "no TCP connect"}
+    return {**res, "ok": True, "ms": round(statistics.mean(rtts)), "min_ms": round(min(rtts)), "max_ms": round(max(rtts))}
+
+
+async def _tcp_ping(host: str, port: int) -> dict:
+    loop = asyncio.get_running_loop()
+    try:  # resolve once so DNS time isn't counted as RTT
+        infos = await asyncio.wait_for(loop.getaddrinfo(host, port, type=socket.SOCK_STREAM), PING_TIMEOUT)
+    except (OSError, asyncio.TimeoutError) as e:
+        return {"ok": False, "method": "tcp", "error": "DNS", "detail": str(e)[:300]}
+    family, _, _, _, addr = infos[0]
+    rtts, last_err = [], None
+    for i in range(PING_COUNT):
+        if i:
+            await asyncio.sleep(0.2)
+        t0 = time.perf_counter()
+        try:
+            _, w = await asyncio.wait_for(asyncio.open_connection(addr[0], addr[1], family=family), PING_TIMEOUT)
+        except (OSError, asyncio.TimeoutError) as e:
+            last_err = str(e) or type(e).__name__
+            continue
+        rtts.append((time.perf_counter() - t0) * 1000)
+        w.close()
+    res = _ping_result(rtts, PING_COUNT, "tcp")
+    if not rtts and last_err:
+        res["detail"] = last_err[:300]
+    return res
+
+
+async def _icmp_ping(host: str) -> dict:
+    try:
+        p = await asyncio.create_subprocess_exec(
+            "ping", "-n", "-c", str(PING_COUNT), "-i", "0.2", "-W", str(max(1, round(PING_TIMEOUT))), host,
+            stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.STDOUT)
+    except FileNotFoundError:
+        return {"ok": False, "method": "icmp", "error": "no ping binary"}
+    out = (await p.communicate())[0].decode(errors="replace")
+    rtts = [float(m) for m in re.findall(r"time[=<]([\d.]+) ?ms", out)]
+    res = _ping_result(rtts, PING_COUNT, "icmp")
+    if not rtts:
+        res["detail"] = out.strip()[-300:]
+    return res
+
+
+async def ping(node: Node) -> dict:
+    """RTT from this host straight to the server, bypassing xray."""
+    if not node.address:
+        return {"ok": False, "error": "no address"}
+    if node.protocol in UDP_PROTOCOLS or node.network in UDP_NETWORKS or not node.port:
+        return await _icmp_ping(node.address)
+    return await _tcp_ping(node.address, node.port)
+
+
 async def probe(node: Node, target_key: str, timeout_s: float) -> dict:
     """Request the target through the node's local proxy inbound and time it."""
     target = TARGETS[target_key]
+    if target["kind"] == "ping":
+        return await ping(node)
     if node.error:
         return {"ok": False, "error": "xray config rejected", "detail": node.error}
     proxy = f"http://127.0.0.1:{node.port_local}"
