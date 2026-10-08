@@ -129,12 +129,13 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
   <button class="btn" id="runAll">Все цели</button>
   <button class="btn" id="reload">Обновить подписку</button>
   <button class="btn" id="report">Сформировать отчёт</button>
+  <button class="btn" id="exportMd" title="Серверы с текущими фильтрами — в Markdown для Telegram">Экспорт MD</button>
   <button class="btn" id="theme" title="Светлая / тёмная тема"></button>
 </header>
 <dialog id="reportDlg">
   <h2 id="reportTitle"></h2>
   <textarea id="reportText" readonly></textarea>
-  <div class="acts"><button class="btn" id="reportCopy">Копировать</button><button class="btn primary" id="reportClose">Закрыть</button></div>
+  <div class="acts"><button class="btn" id="reportSave" hidden>Скачать .md</button><button class="btn" id="reportCopy">Копировать</button><button class="btn primary" id="reportClose">Закрыть</button></div>
 </dialog>
 <div class="bar">
   <span class="view" id="view"><button data-v="grid" title="Матрица">▦ Матрица</button><button data-v="list" title="Список">☰ Список</button></span>
@@ -165,7 +166,7 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
 <script>
 const $ = s => document.querySelector(s);
 const cells = new Map();
-let S = null, target = localStorage.getItem('target') || 'cloudflare';
+let S = null, shown = [], target = localStorage.getItem('target') || 'cloudflare';
 let view = localStorage.getItem('view') === 'list' ? 'list' : 'grid';
 let status = localStorage.getItem('status') || '';
 // status of a node for the selected target: ok / bad / none (not checked yet or in progress)
@@ -280,6 +281,7 @@ function render() {
     const v = n => { const r = res[n.id]; if (!r || r.state !== 'done') return 1e9; if (!r.ok) return 1e8; return kind === 'download' ? -r.mbps : r.ms; };
     nodes.sort((a, b) => v(a) - v(b));
   }
+  shown = nodes;
 
   $('#view').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
   $('#grid').classList.toggle('list', view === 'list');
@@ -374,7 +376,43 @@ $('#report').onclick = () => {
   $('#reportTitle').textContent = `${S.targets[target].label}: недоступно ${failed.length}`;
   $('#reportText').value = failed.map(n => n.name).join('\n');
   $('#reportCopy').textContent = 'Копировать';
+  $('#reportSave').hidden = true;
   $('#reportDlg').showModal();
+};
+// Telegram parses **bold** and `code` when the text is pasted into the message box; tables aren't supported, so one line per server
+$('#exportMd').onclick = () => {
+  if (!S) return;
+  const res = S.results[target] || {};
+  const icon = { ok: '✅', bad: '❌', none: '⏳' };
+  // drop backticks and collapse **, __, ~~ so server names can't toggle formatting
+  const md = s => String(s ?? '').replace(/`/g, "'").replace(/([*_~|])\1+/g, '$1');
+  const keys = Object.keys(S.targets);
+  const vals = n => keys.map(k => `${S.targets[k].label} ${S.results[k][n.id] ? miniVal(k, S.results[k][n.id]) : '—'}`).join(' · ');
+  const cnt = { ok: 0, bad: 0, none: 0 };
+  shown.forEach(n => cnt[nodeStatus(res[n.id])]++);
+  const lines = [
+    `**Xray Checker** · ${new Date().toLocaleString()}`,
+    `Цель: **${md(S.targets[target].label)}** · ✅ ${cnt.ok} · ❌ ${cnt.bad}` + (cnt.none ? ` · ⏳ ${cnt.none}` : ''),
+    '',
+    ...shown.map(n => {
+      const r = res[n.id], st = nodeStatus(r);
+      const main = st === 'bad' ? md(r.error || 'ошибка') : st === 'ok' ? (S.targets[target].kind === 'download' ? `${r.mbps} Mbit/s` : fmt(r.ms)) : 'не проверен';
+      return `${icon[st]} **${md(n.name)}** — ${main}\n    \`${n.protocol} · ${vals(n)}\``;
+    }),
+  ];
+  const text = lines.join('\n');
+  $('#reportTitle').textContent = `Markdown: ${shown.length} серверов · ${text.length} символов` + (text.length > 4096 ? ' (Telegram разобьёт на несколько сообщений)' : '');
+  $('#reportText').value = text;
+  $('#reportCopy').textContent = 'Копировать';
+  $('#reportSave').hidden = false;
+  $('#reportDlg').showModal();
+};
+$('#reportSave').onclick = () => {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([$('#reportText').value], { type: 'text/markdown' }));
+  a.download = `xray-${target}-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.md`;
+  a.click();
+  URL.revokeObjectURL(a.href);
 };
 $('#reportCopy').onclick = async e => {
   const t = $('#reportText');
