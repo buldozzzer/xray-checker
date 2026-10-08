@@ -4,40 +4,54 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Xray Checker</title>
+<script>try { if (localStorage.getItem('theme') === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) {}</script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/css/flag-icons.min.css">
 <style>
 :root {
   --bg: #0d1017; --panel: #151a24; --cell: #181e2a; --border: #262e3e;
   --text: #e6e9ef; --muted: #8a93a6; --accent: #ffcc00;
   --good: #2fbf71; --mid: #e5b72e; --slow: #e8803a; --bad: #e5484d; --idle: #3a4356;
+  --accent-t: var(--accent); --on-accent: #111; --header-bg: rgba(13,16,23,.95); --cell-hover: #1d2433;
+  --shadow: rgba(0,0,0,.55); --backdrop: rgba(0,0,0,.6); --err-bg: #3a1418; --mini-bg: #222a39; --flag-ring: rgba(255,255,255,.12);
+  --good-t: #7fe0a9; --mid-t: #f0d27a; --slow-t: #f4ac7c; --bad-t: #f3878a;
+  color-scheme: dark;
+}
+:root[data-theme="light"] {
+  --bg: #f3f5f9; --panel: #ffffff; --cell: #ffffff; --border: #d8dde7;
+  --text: #1a1f2b; --muted: #5d6676; --accent: #f5c000; --accent-t: #9a7400;
+  --good: #1f9d57; --mid: #c99a12; --slow: #d56a22; --bad: #d73a40; --idle: #c3cad6;
+  --header-bg: rgba(243,245,249,.95); --cell-hover: #ffffff; --shadow: rgba(30,40,60,.18); --backdrop: rgba(20,25,35,.35);
+  --err-bg: #fde8e9; --mini-bg: #eceff4; --flag-ring: rgba(0,0,0,.15);
+  --good-t: #157a42; --mid-t: #8a6a00; --slow-t: #a8501a; --bad-t: #b3262c;
+  color-scheme: light;
 }
 * { box-sizing: border-box; }
 body { margin: 0; overflow-x: hidden; background: var(--bg); color: var(--text);
   font: 14px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-header { position: sticky; top: 0; z-index: 5; background: rgba(13,16,23,.95); backdrop-filter: blur(6px);
+header { position: sticky; top: 0; z-index: 5; background: var(--header-bg); backdrop-filter: blur(6px);
   border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
 h1 { font-size: 17px; margin: 0; letter-spacing: .3px; }
-h1 span { color: var(--accent); }
+h1 span { color: var(--accent-t); }
 .tabs { display: flex; gap: 4px; background: var(--panel); padding: 3px; border-radius: 8px; border: 1px solid var(--border); flex-wrap: wrap; }
 .tabs button { background: none; border: 0; color: var(--muted); padding: 6px 12px; border-radius: 6px; cursor: pointer; font: inherit; }
-.tabs button.on { background: var(--accent); color: #111; font-weight: 600; }
+.tabs button.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 .btn { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 7px 12px;
   border-radius: 7px; cursor: pointer; font: inherit; }
 .btn:hover { border-color: var(--accent); }
-.btn.primary { background: var(--accent); color: #111; border-color: var(--accent); font-weight: 600; }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
 .spacer { flex: 1; }
 .bar { padding: 10px 16px; display: flex; flex-wrap: wrap; gap: 8px 18px; align-items: center; color: var(--muted); font-size: 13px; }
 .bar b { color: var(--text); }
 .bar select, .bar input { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 5px 8px; font: inherit; }
 .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin: 0 4px 0 10px; vertical-align: -1px; }
-.err { margin: 0 16px 10px; padding: 10px 12px; background: #3a1418; border: 1px solid var(--bad); border-radius: 8px; display: none; }
+.err { margin: 0 16px 10px; padding: 10px 12px; background: var(--err-bg); border: 1px solid var(--bad); border-radius: 8px; display: none; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; padding: 6px 16px 24px; }
 .cell { background: var(--cell); border: 1px solid var(--border); border-left: 4px solid var(--idle);
   border-radius: 8px; padding: 9px 10px 8px; cursor: pointer; position: relative; min-width: 0;
   transition: transform .18s ease, box-shadow .18s ease, border-color .15s; }
 .cell:hover { border-color: var(--accent); }
 @media (hover: hover) {
-  .cell:hover { transform: scale(1.12); z-index: 3; background: #1d2433; box-shadow: 0 10px 30px rgba(0,0,0,.55); }
+  .cell:hover { transform: scale(1.12); z-index: 3; background: var(--cell-hover); box-shadow: 0 10px 30px var(--shadow); }
 }
 @media (prefers-reduced-motion: reduce) { .cell { transition: none; } }
 .cell.good { border-left-color: var(--good); } .cell.mid { border-left-color: var(--mid); }
@@ -47,11 +61,11 @@ h1 span { color: var(--accent); }
 .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 18px; }
 .star { position: absolute; top: 6px; right: 7px; background: none; border: 0; padding: 0; cursor: pointer;
   font-size: 15px; line-height: 1; color: var(--idle); }
-.star:hover { color: var(--accent); }
-.star.on { color: var(--accent); }
+.star:hover { color: var(--accent-t); }
+.star.on { color: var(--accent-t); }
 .hist { position: absolute; top: 6px; right: 26px; background: none; border: 0; padding: 0; cursor: pointer;
   font-size: 13px; line-height: 1; color: var(--muted); }
-.hist:hover { color: var(--accent); }
+.hist:hover { color: var(--accent-t); }
 .name { padding-right: 38px; }
 .strip { display: flex; gap: 1px; height: 6px; margin-top: 5px; }
 .strip i { flex: 1; max-width: 6px; border-radius: 1px; background: var(--bad); }
@@ -60,26 +74,26 @@ h1 span { color: var(--accent); }
 .htable { width: 100%; border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
 .htable th, .htable td { text-align: left; padding: 4px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
 .htable th { color: var(--muted); font-weight: 500; }
-.htable td.ok { color: #7fe0a9; } .htable td.bad { color: #f3878a; }
+.htable td.ok { color: var(--good-t); } .htable td.bad { color: var(--bad-t); }
 .hscroll { max-height: 50vh; overflow: auto; margin-top: 12px; }
 .hbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; color: var(--muted); font-size: 13px; }
 .hbar select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 6px; padding: 4px 6px; font: inherit; }
-.name .fi { margin-right: 6px; border-radius: 2px; box-shadow: 0 0 0 1px rgba(255,255,255,.12); }
+.name .fi { margin-right: 6px; border-radius: 2px; box-shadow: 0 0 0 1px var(--flag-ring); }
 .proto { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.proto .p { color: var(--accent); text-transform: uppercase; font-weight: 600; }
+.proto .p { color: var(--accent-t); text-transform: uppercase; font-weight: 600; }
 .val { font-size: 20px; font-weight: 700; margin: 6px 0 2px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .val small { font-size: 12px; color: var(--muted); font-weight: 500; }
 .val.e { font-size: 14px; color: var(--bad); }
 .minis { display: flex; gap: 4px; margin-top: 4px; }
-.mini { flex: 1; font-size: 10px; text-align: center; padding: 2px 0; border-radius: 4px; background: #222a39; color: var(--muted);
+.mini { flex: 1; font-size: 10px; text-align: center; padding: 2px 0; border-radius: 4px; background: var(--mini-bg); color: var(--muted);
   white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
-.mini.good { background: rgba(47,191,113,.18); color: #7fe0a9; } .mini.mid { background: rgba(229,183,46,.18); color: #f0d27a; }
-.mini.slow { background: rgba(232,128,58,.18); color: #f4ac7c; } .mini.bad { background: rgba(229,72,77,.2); color: #f3878a; }
-.mini.run { color: var(--accent); }
+.mini.good { background: rgba(47,191,113,.18); color: var(--good-t); } .mini.mid { background: rgba(229,183,46,.18); color: var(--mid-t); }
+.mini.slow { background: rgba(232,128,58,.18); color: var(--slow-t); } .mini.bad { background: rgba(229,72,77,.2); color: var(--bad-t); }
+.mini.run { color: var(--accent-t); }
 .mini.sel { outline: 1px solid var(--accent); }
 dialog { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 10px; padding: 16px;
   width: min(560px, calc(100vw - 32px)); }
-dialog::backdrop { background: rgba(0,0,0,.6); }
+dialog::backdrop { background: var(--backdrop); }
 dialog h2 { font-size: 15px; margin: 0 0 10px; }
 dialog textarea { width: 100%; height: 50vh; background: var(--bg); color: var(--text); border: 1px solid var(--border);
   border-radius: 6px; padding: 8px; font: 13px/1.5 ui-monospace, monospace; resize: vertical; }
@@ -98,7 +112,7 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
 @media (hover: hover) { .grid.list .cell:hover { transform: scale(1.015); } }
 .view { display: inline-flex; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; vertical-align: middle; }
 .view button { background: var(--panel); color: var(--muted); border: 0; padding: 4px 10px; cursor: pointer; font: inherit; }
-.view button.on { background: var(--accent); color: #111; font-weight: 600; }
+.view button.on { background: var(--accent); color: var(--on-accent); font-weight: 600; }
 @media (max-width: 760px) {
   .grid.list, .lhead { --cols: 18px 18px minmax(0, 1fr) 110px; }
   .grid.list .proto, .grid.list .minis, .grid.list .strip, .lhead .hp, .lhead .mh, .lhead .hs { display: none; }
@@ -115,6 +129,7 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
   <button class="btn" id="runAll">Все цели</button>
   <button class="btn" id="reload">Обновить подписку</button>
   <button class="btn" id="report">Сформировать отчёт</button>
+  <button class="btn" id="theme" title="Светлая / тёмная тема"></button>
 </header>
 <dialog id="reportDlg">
   <h2 id="reportTitle"></h2>
@@ -302,7 +317,7 @@ function render() {
   const all = Object.values(res), done = all.filter(r => r.state === 'done');
   const ok = done.filter(r => r.ok).length;
   $('#summary').innerHTML = `Серверов: <b>${S.nodes.length}</b> · ${esc(S.targets[target].label)}: <b style="color:var(--good)">${ok}</b> ок / <b style="color:var(--bad)">${done.length - ok}</b> недоступно` +
-    (S.active ? ` · в работе: <b style="color:var(--accent)">${S.active}</b>` : '') + ` · таймаут ${S.timeout}s`;
+    (S.active ? ` · в работе: <b style="color:var(--accent-t)">${S.active}</b>` : '') + ` · таймаут ${S.timeout}s`;
   const wi = $('#watchInfo');
   if (!S.watch_interval) wi.textContent = '';
   else {
@@ -324,6 +339,14 @@ async function check(targets, ids) {
   refresh();
 }
 
+const themeBtn = $('#theme');
+const setTheme = t => {
+  if (t === 'light') document.documentElement.dataset.theme = 'light'; else delete document.documentElement.dataset.theme;
+  themeBtn.textContent = t === 'light' ? '☾' : '☀';
+  try { localStorage.setItem('theme', t); } catch (e) {}
+};
+setTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
+themeBtn.onclick = () => setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
 $('#view').onclick = e => { const v = e.target.dataset.v; if (v) { view = v; localStorage.setItem('view', v); render(); } };
 $('#fStatus').onclick = e => { const b = e.target.closest('button'); if (b) { status = b.dataset.s; localStorage.setItem('status', status); render(); } };
 $('#tabs').onclick = e => { const k = e.target.dataset.k; if (k) { target = k; localStorage.setItem('target', k); render(); } };
