@@ -57,13 +57,13 @@ body { margin: 0; overflow-x: hidden; color: var(--text); font: 14px/1.4 var(--f
 /* CRT scanlines over the page (dark only, ignores the pointer) */
 body::after { content: ''; position: fixed; inset: 0; z-index: 20; pointer-events: none;
   background: repeating-linear-gradient(0deg, var(--scan) 0 1px, transparent 1px 3px); }
-/* ripple: flickering grain + a slow scan band rolling down; transform-only animations, never catch the pointer */
-body::before { content: ''; position: fixed; inset: -50%; z-index: 20; pointer-events: none; opacity: var(--noise);
+/* ripple: flickering grain + a slow scan band rolling down, painted under the content so text stays clean */
+body::before { content: ''; position: fixed; inset: -50%; z-index: -1; pointer-events: none; opacity: var(--noise);
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   animation: grain .8s steps(5) infinite; }
 @keyframes grain { 0% { transform: translate(0, 0); } 20% { transform: translate(-7%, 4%); } 40% { transform: translate(5%, -6%); }
   60% { transform: translate(-3%, 8%); } 80% { transform: translate(8%, 2%); } 100% { transform: translate(0, 0); } }
-html::after { content: ''; position: fixed; left: 0; right: 0; top: 0; height: 140px; z-index: 20; pointer-events: none;
+html::after { content: ''; position: fixed; left: 0; right: 0; top: 0; height: 140px; z-index: -1; pointer-events: none;
   background: linear-gradient(transparent, var(--sweep) 60%, transparent); animation: sweepdown 7s linear infinite; }
 @keyframes sweepdown { from { transform: translateY(-140px); } to { transform: translateY(100vh); } }
 @media (prefers-reduced-motion: reduce) { body::before, html::after { animation: none; } html::after { display: none; } }
