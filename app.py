@@ -90,7 +90,7 @@ def forget_missing(present: set[str]):
     log.info("forgot %d server(s) missing from subscription", len(gone))
 
 
-async def reload_subscription():
+async def reload_subscription(forget: bool = True):
     async with state.lock:
         for t in list(state.tasks):
             t.cancel()
@@ -104,7 +104,7 @@ async def reload_subscription():
             state.load_error = f"{type(e).__name__}: {e}"
             raise
         state.nodes = nodes
-        if nodes:  # an empty subscription is more likely a glitch than every server being removed
+        if forget and nodes:  # an empty subscription is more likely a glitch than every server being removed
             forget_missing({n.name for n in nodes})
         state.results = {k: {n.id: state.saved[k][n.name] for n in nodes if n.name in state.saved[k]} for k in TARGETS}
         state.loaded_at = time.time()
@@ -163,7 +163,7 @@ async def watch_loop():
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     try:
-        await reload_subscription()
+        await reload_subscription(forget=False)  # startup keeps data; only a manual reload drops it
     except Exception:
         pass  # surfaced in /api/state; user can retry from the UI
     bg = []
