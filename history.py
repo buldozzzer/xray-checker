@@ -35,6 +35,16 @@ class History:
             self.db.execute("DELETE FROM checks WHERE ts < ?", (time.time() - self.retention_days * 86400,))
             self.db.commit()
 
+    def forget(self, names: set[str]):
+        """Drops all checks of the given servers."""
+        self.db.executemany("DELETE FROM checks WHERE name = ?", [(n,) for n in names])
+        self.db.commit()
+        for n in names:
+            self.recent.pop(n, None)
+
+    def names(self) -> set[str]:
+        return {r[0] for r in self.db.execute("SELECT DISTINCT name FROM checks")}
+
     def recent_for(self, names: list[str]) -> dict:
         """Compact form for the polled state: oldest-to-newest outcomes as a "1"/"0" string."""
         return {n: {t: "".join(str(ok) for _, ok in q) for t, q in self.recent[n].items()}

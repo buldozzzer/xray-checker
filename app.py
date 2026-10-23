@@ -76,6 +76,20 @@ class State:
 state = State()
 
 
+def forget_missing(present: set[str]):
+    """Removes history, saved results and watch marks of servers no longer in the subscription."""
+    gone = (state.history.names() | state.watched | {n for v in state.saved.values() for n in v}) - present
+    if not gone:
+        return
+    state.history.forget(gone)
+    for v in state.saved.values():
+        for n in gone:
+            v.pop(n, None)
+    state.watched -= gone
+    state.save()
+    log.info("forgot %d server(s) missing from subscription", len(gone))
+
+
 async def reload_subscription():
     async with state.lock:
         for t in list(state.tasks):
@@ -90,6 +104,8 @@ async def reload_subscription():
             state.load_error = f"{type(e).__name__}: {e}"
             raise
         state.nodes = nodes
+        if nodes:  # an empty subscription is more likely a glitch than every server being removed
+            forget_missing({n.name for n in nodes})
         state.results = {k: {n.id: state.saved[k][n.name] for n in nodes if n.name in state.saved[k]} for k in TARGETS}
         state.loaded_at = time.time()
         state.load_error = None
@@ -194,6 +210,12 @@ async def get_state():
 @app.get("/api/history")
 async def history(name: str, days: float = 30):
     return state.history.server(name, days)
+
+
+@app.delete("/api/history")
+async def clear_history(name: str):
+    state.history.forget({name})
+    return {"ok": True}
 
 
 @app.post("/api/check")
