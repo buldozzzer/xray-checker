@@ -22,10 +22,10 @@
   --grid-line: rgba(0,240,255,.045); --haze: 16%; --scan: rgba(0,0,0,.2); --glow: 1;
   --noise: .07; --sweep: rgba(0,240,255,.045);
   --lift: 0 0 0 1px var(--neon), 0 0 24px rgba(0,240,255,.35), 0 14px 40px var(--shadow);
+  --accent-edge: #fcee0a; --accent-hi: #fff57a; --ctl: 32px;
   --title-shadow: -1.5px 0 var(--neon2), 1.5px 0 var(--neon), 0 0 18px rgba(0,240,255,.45);
   --font: "Exo 2", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace; --display: "Russo One", "Exo 2", sans-serif;
-  --cut: polygon(0 0, calc(100% - 9px) 0, 100% 9px, 100% 100%, 9px 100%, 0 calc(100% - 9px));
   --slant: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
   color-scheme: dark;
 }
@@ -40,6 +40,7 @@
   --grid-line: rgba(0,137,163,.08); --haze: 9%; --scan: transparent; --glow: 0;
   --noise: .035; --sweep: rgba(0,137,163,.05);
   --lift: 0 0 0 1px var(--text), 5px 5px 0 var(--neon2);
+  --accent-edge: #b8a900; --accent-hi: #fff35c;
   --title-shadow: -1px 0 var(--neon2), 1px 0 var(--neon);
   color-scheme: light;
 }
@@ -75,20 +76,42 @@ header::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; h
   box-shadow: 0 0 calc(12px * var(--glow)) color-mix(in srgb, var(--neon2) 60%, transparent); }
 h1 { font: 18px/1 var(--display); margin: 0; letter-spacing: .12em; text-transform: uppercase; text-shadow: var(--title-shadow); }
 h1 span { color: var(--accent-t); text-shadow: 0 0 calc(12px * var(--glow)) var(--accent); }
-.tabs { display: flex; gap: 2px; background: var(--panel); padding: 3px; border: 1px solid var(--border); flex-wrap: wrap; clip-path: var(--cut); }
-.tabs button { background: none; border: 0; color: var(--muted); padding: 6px 14px; cursor: pointer;
-  font: 600 12px/1.4 var(--font); text-transform: uppercase; letter-spacing: .08em; }
-.tabs button:hover { color: var(--neon); }
+.tabs { display: flex; gap: 2px; background: var(--panel); padding: 3px; border: 1px solid var(--border); flex-wrap: wrap; }
+.tabs button { background: none; border: 0; color: var(--muted); height: 26px; padding: 0 14px; cursor: pointer;
+  font: 600 11.5px/1 var(--font); text-transform: uppercase; letter-spacing: .08em; transition: color .15s, background-color .15s; }
+.tabs button:hover { color: var(--text); background: color-mix(in srgb, var(--neon) 8%, transparent); }
 .tabs button.on { background: var(--accent); color: var(--on-accent); clip-path: var(--slant); }
-.btn { background: var(--panel); color: var(--text); border: 1px solid var(--border); padding: 8px 12px; cursor: pointer;
-  font: 600 12px/1.4 var(--font); text-transform: uppercase; letter-spacing: .04em; clip-path: var(--cut);
-  transition: color .15s, border-color .15s, box-shadow .15s, background .15s; }
-.btn:hover { border-color: var(--neon); color: var(--neon); box-shadow: inset 0 0 calc(14px * var(--glow)) color-mix(in srgb, var(--neon) 35%, transparent); }
-.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
-.btn.primary:hover { background: var(--text); border-color: var(--text); color: var(--bg); }
-.btn:disabled { opacity: .5; cursor: progress; }
-.btn.danger { color: var(--bad-t); }
-.btn.danger:hover { border-color: var(--bad); color: var(--bad-t); box-shadow: inset 0 0 calc(14px * var(--glow)) color-mix(in srgb, var(--bad) 35%, transparent); }
+/* buttons: notched corners with an unbroken 1px edge — the button itself paints the edge (--b),
+   ::before paints the fill (--f) 1px inside; the inner notch is .59px smaller so the diagonal edge stays 1px thick */
+.btn { --b: var(--border); --f: var(--panel); --c: var(--text); --k: 7px;
+  position: relative; isolation: isolate; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  height: 34px; padding: 0 14px; border: 0; background: var(--b); color: var(--c); cursor: pointer; white-space: nowrap;
+  font: 600 13px/1 var(--font); letter-spacing: .01em;
+  clip-path: polygon(0 0, calc(100% - var(--k)) 0, 100% var(--k), 100% 100%, var(--k) 100%, 0 calc(100% - var(--k)));
+  transition: background-color .18s, color .18s, transform .08s ease-out; }
+.btn::before { content: ''; position: absolute; inset: 1px; z-index: -1; background: var(--f); --k: 6.41px;
+  clip-path: polygon(0 0, calc(100% - var(--k)) 0, 100% var(--k), 100% 100%, var(--k) 100%, 0 calc(100% - var(--k)));
+  transition: background-color .18s; }
+.btn .i { width: 15px; height: 15px; flex: none; }
+.btn:hover { --b: var(--neon); --c: var(--neon); --f: color-mix(in srgb, var(--neon) 9%, var(--panel)); }
+.btn:active { transform: translateY(1px); }
+.btn:focus-visible { outline: 0; --b: var(--neon); --f: color-mix(in srgb, var(--neon) 16%, var(--panel)); }
+.btn.primary { --b: var(--accent-edge); --f: var(--accent); --c: var(--on-accent); padding: 0 16px 0 13px; }
+.btn.primary:hover, .btn.primary:focus-visible { --b: var(--accent-edge); --f: var(--accent-hi); --c: var(--on-accent); }
+.btn.ghost { --b: transparent; --f: transparent; --c: var(--muted); padding: 0 10px; }
+.btn.ghost:hover, .btn.ghost:focus-visible { --b: var(--border); --f: var(--panel); --c: var(--text); }
+.btn.icon { width: 34px; padding: 0; }
+.btn.danger { --c: var(--bad-t); }
+.btn.danger:hover, .btn.danger:focus-visible { --b: var(--bad); --c: var(--bad-t); --f: color-mix(in srgb, var(--bad) 10%, var(--panel)); }
+.btn:disabled { opacity: .55; cursor: progress; transform: none; }
+.btn.busy .i { animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.btn.push { margin-right: auto; }
+.actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.tools { display: flex; align-items: center; gap: 2px; padding-left: 8px; margin-left: 4px; border-left: 1px solid var(--border); }
+.theme-sun, :root[data-theme="light"] .theme-moon { display: none; }
+:root[data-theme="light"] .theme-sun { display: block; }
+@media (max-width: 1100px) { .tools .btn.ghost .l { display: none; } .tools .btn.ghost { width: 34px; padding: 0; } }
 .spacer { flex: 1; }
 [hidden] { display: none !important; }
 /* filters: controls row + info row */
@@ -97,18 +120,22 @@ h1 span { color: var(--accent-t); text-shadow: 0 0 calc(12px * var(--glow)) var(
 .frow.info { color: var(--muted); font-size: 12px; gap: 6px 16px; }
 .frow.info b { color: var(--text); font-family: var(--mono); }
 .search { position: relative; flex: 1 1 240px; max-width: 340px; display: flex; align-items: center; }
-.search input { width: 100%; background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 0;
-  padding: 7px 30px; font: inherit; }
+.search input { width: 100%; height: var(--ctl); background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 0;
+  padding: 0 30px; font: inherit; transition: border-color .15s, box-shadow .15s; }
 .search svg { position: absolute; left: 9px; width: 14px; height: 14px; color: var(--muted); pointer-events: none; }
 .search kbd { position: absolute; right: 8px; font: 11px/1.4 var(--mono); color: var(--muted); border: 1px solid var(--border); padding: 0 5px; pointer-events: none; }
 .search input:focus ~ kbd, .search input:not(:placeholder-shown) ~ kbd, .search input:placeholder-shown ~ .sclear { display: none; }
 .sclear { position: absolute; right: 4px; background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 13px; padding: 4px 6px; }
 .sclear:hover { color: var(--bad-t); }
+.chip:focus-visible, .view button:focus-visible, .tabs button:focus-visible, .ibtn:focus-visible { outline: 1px solid var(--neon); outline-offset: 1px; }
 .search input:focus, .fsel select:focus, .hbar select:focus { outline: 0; border-color: var(--neon); box-shadow: 0 0 0 3px color-mix(in srgb, var(--neon) 22%, transparent); }
 .fsel { color: var(--muted); display: inline-flex; align-items: center; gap: 6px; }
-.fsel select { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 0; padding: 6px 8px; font: inherit; }
-.chip { background: var(--panel); color: var(--muted); border: 1px solid var(--border); padding: 5px 10px; cursor: pointer; font: inherit; }
-.chip:hover { color: var(--neon); border-color: var(--neon); }
+.fsel select { height: var(--ctl); background: var(--panel); color: var(--text); border: 1px solid var(--border); border-radius: 0; padding: 0 8px; font: inherit; cursor: pointer; }
+.fsel select:hover, .hbar select:hover { border-color: color-mix(in srgb, var(--neon) 50%, var(--border)); }
+.chip { display: inline-flex; align-items: center; height: var(--ctl); background: var(--panel); color: var(--muted); border: 1px solid var(--border);
+  padding: 0 12px; cursor: pointer; font: inherit; transition: color .15s, border-color .15s, background-color .15s; }
+.chip:hover { color: var(--text); border-color: color-mix(in srgb, var(--neon) 50%, var(--border)); }
+.chip:active, .view button:active, .tabs button:active { transform: translateY(1px); }
 .chip.on { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
 .view button .n, .chip .n { margin-left: 6px; font: 11px var(--mono); opacity: .7; }
 .view button.on .n, .chip.on .n { opacity: 1; }
@@ -121,7 +148,7 @@ h1 span { color: var(--accent-t); text-shadow: 0 0 calc(12px * var(--glow)) var(
 input[type="checkbox"] { accent-color: var(--neon2); }
 .legend i { display: inline-block; width: 10px; height: 10px; margin: 0 4px 0 10px; vertical-align: -1px; transform: skewX(-15deg); }
 .err { margin: 0 16px 10px; padding: 10px 12px; background: var(--err-bg); border: 1px solid var(--bad); border-left-width: 4px;
-  color: var(--bad-t); font-family: var(--mono); font-size: 13px; clip-path: var(--cut); display: none; }
+  color: var(--bad-t); font-family: var(--mono); font-size: 13px; display: none; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; padding: 6px 16px 24px; }
 .cell { --st: var(--idle); background: var(--cell); border: 1px solid var(--border); border-left: 4px solid var(--st);
   padding: 9px 10px 8px; cursor: pointer; position: relative; min-width: 0;
@@ -142,14 +169,17 @@ input[type="checkbox"] { accent-color: var(--neon2); }
 @keyframes sweep { from { background-position: 150% 0; } to { background-position: -50% 0; } }
 @media (prefers-reduced-motion: reduce) { .cell { transition: none; } .cell.run { animation: none; } }
 .name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 18px; }
-.star { position: absolute; top: 6px; right: 7px; background: none; border: 0; padding: 0; cursor: pointer;
-  font-size: 15px; line-height: 1; color: var(--idle); }
+.ibtn { position: absolute; top: 4px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0;
+  background: none; border: 0; color: var(--muted); cursor: pointer; transition: color .15s, background-color .15s; }
+.ibtn svg { width: 14px; height: 14px; }
+.ibtn:hover { background: var(--mini-bg); color: var(--neon); }
+.star { right: 4px; color: var(--idle); }
+.star svg { fill: none; }
 .star:hover { color: var(--accent-t); }
-.star.on { color: var(--accent-t); text-shadow: 0 0 calc(8px * var(--glow)) var(--accent); }
-.hist { position: absolute; top: 6px; right: 26px; background: none; border: 0; padding: 0; cursor: pointer;
-  font-size: 13px; line-height: 1; color: var(--muted); }
-.hist:hover { color: var(--neon); }
-.name { padding-right: 38px; }
+.star.on { color: var(--accent-t); filter: drop-shadow(0 0 calc(5px * var(--glow)) var(--accent)); }
+.star.on svg { fill: currentColor; }
+.hist { right: 27px; }
+.name { padding-right: 50px; }
 .strip { display: flex; gap: 1px; height: 6px; margin-top: 5px; }
 .strip i { flex: 1; max-width: 6px; background: var(--bad); opacity: .85; }
 .strip i.ok { background: var(--good); }
@@ -160,8 +190,8 @@ input[type="checkbox"] { accent-color: var(--neon2); }
 .htable td.ok { color: var(--good-t); } .htable td.bad { color: var(--bad-t); }
 .hscroll { max-height: 50vh; overflow: auto; margin-top: 12px; }
 .hbar { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-.hbar select { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 0; padding: 4px 6px; font: inherit; text-transform: none; letter-spacing: 0; }
-.name .fi { margin-right: 6px; box-shadow: 0 0 0 1px var(--flag-ring); }
+.hbar select { height: 28px; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 0; padding: 0 6px; cursor: pointer; font: inherit; text-transform: none; letter-spacing: 0; }
+.name .fi, dialog h2 .fi { margin-right: 6px; box-shadow: 0 0 0 1px var(--flag-ring); }
 .proto { font-size: 11px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); }
 .proto .p { color: var(--neon); text-transform: uppercase; font-weight: 700; }
 .val { font: 700 20px/1.3 var(--mono); margin: 6px 0 2px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
@@ -178,19 +208,23 @@ input[type="checkbox"] { accent-color: var(--neon2); }
 .mini.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad-t); }
 .mini.run { color: var(--accent-t); }
 .mini.sel { outline: 1px solid var(--neon); }
-dialog { background: var(--panel); color: var(--text); border: 1px solid var(--border); border-top: 2px solid var(--neon2); padding: 18px;
-  width: min(560px, calc(100vw - 32px)); clip-path: var(--cut); }
+dialog { --k: 9px; background: var(--border); color: var(--text); border: 0; padding: 18px; isolation: isolate;
+  width: min(560px, calc(100vw - 32px));
+  clip-path: polygon(0 0, calc(100% - var(--k)) 0, 100% var(--k), 100% 100%, var(--k) 100%, 0 calc(100% - var(--k))); }
+dialog::before { content: ''; position: absolute; inset: 1px; z-index: -1; --k: 8.41px; background: var(--panel);
+  border-top: 2px solid var(--neon2);
+  clip-path: polygon(0 0, calc(100% - var(--k)) 0, 100% var(--k), 100% 100%, var(--k) 100%, 0 calc(100% - var(--k))); }
 dialog::backdrop { background: var(--backdrop); backdrop-filter: blur(2px); }
 dialog h2 { font: 15px/1.3 var(--display); margin: 0 0 12px; letter-spacing: .06em; text-transform: uppercase; }
 dialog textarea { width: 100%; height: 50vh; background: var(--bg); color: var(--text); border: 1px solid var(--border);
   padding: 8px; font: 13px/1.5 var(--mono); resize: vertical; }
 dialog textarea:focus { outline: 1px solid var(--neon); }
-dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+dialog .acts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 /* list view: same cells laid out as table rows */
-.grid.list, .lhead { --cols: 18px 18px minmax(170px, 1.6fr) minmax(150px, 1.3fr) minmax(130px, 1fr) minmax(170px, 1.2fr) minmax(90px, 140px); }
+.grid.list, .lhead { --cols: 22px 22px minmax(170px, 1.6fr) minmax(150px, 1.3fr) minmax(130px, 1fr) minmax(170px, 1.2fr) minmax(90px, 140px); }
 .grid.list { grid-template-columns: 1fr; gap: 4px; padding-top: 0; }
 .grid.list .cell, .lhead { display: grid; grid-template-columns: var(--cols); gap: 10px; align-items: center; padding: 6px 10px; }
-.grid.list .hist, .grid.list .star { position: static; }
+.grid.list .ibtn { position: static; }
 .grid.list .name, .grid.list .proto, .grid.list .val, .grid.list .minis, .grid.list .strip { margin: 0; padding-right: 0; }
 .grid.list .val { font-size: 15px; }
 .grid.list .strip { height: 8px; }
@@ -198,34 +232,51 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
 .lhead.on { display: grid; }
 .lhead .mh { display: flex; gap: 3px; } .lhead .mh span { flex: 1; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @media (hover: hover) { .grid.list .cell:hover { transform: scale(1.015); } }
-.view { display: inline-flex; border: 1px solid var(--border); overflow: hidden; vertical-align: middle; background: var(--panel); }
-.view button { background: none; color: var(--muted); border: 0; padding: 5px 10px; cursor: pointer; font: inherit; }
-.view button:hover { color: var(--neon); }
+.view { display: inline-flex; gap: 2px; padding: 2px; height: var(--ctl); border: 1px solid var(--border); vertical-align: middle; background: var(--panel); }
+.view button { display: inline-flex; align-items: center; background: none; color: var(--muted); border: 0; padding: 0 10px; cursor: pointer; font: inherit;
+  transition: color .15s, background-color .15s; }
+.view button:hover { color: var(--text); background: color-mix(in srgb, var(--neon) 8%, transparent); }
 .view button.on { background: var(--accent); color: var(--on-accent); font-weight: 600; clip-path: var(--slant); }
 @media (max-width: 760px) {
-  .grid.list, .lhead { --cols: 18px 18px minmax(0, 1fr) 110px; }
+  .grid.list, .lhead { --cols: 22px 22px minmax(0, 1fr) 110px; }
   .grid.list .proto, .grid.list .minis, .grid.list .strip, .lhead .hp, .lhead .mh, .lhead .hs { display: none; }
 }
 @media (max-width: 520px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 6px 10px 20px; } header, .filters { padding-left: 10px; padding-right: 10px; } .search { max-width: none; flex-basis: 100%; } }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 16 16"><path d="M5 3.2v9.6L12.6 8z" fill="currentColor"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 16 16"><path d="M8 2 1.8 5 8 8l6.2-3zM1.8 8 8 11l6.2-3M1.8 11 8 14l6.2-3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+  <symbol id="i-refresh" viewBox="0 0 16 16"><path d="M13.3 8.5A5.3 5.3 0 1 1 11.8 4.3M12.3 1.8v2.9H9.4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 16 16"><path d="M4 1.8h5.3L12.5 5v9.2H4zM9.2 1.8V5h3.3M8.2 7.5v2.8M8.2 12h.01" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-down" viewBox="0 0 16 16"><path d="M8 2v8.2M4.6 6.9 8 10.3l3.4-3.4M2.5 13.6h11" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 16 16"><path d="M13.4 9.6A5.6 5.6 0 0 1 6.4 2.6a5.6 5.6 0 1 0 7 7z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="2.8"/><path d="M8 1.5v1.4M8 13.1v1.4M1.5 8h1.4M13.1 8h1.4M3.4 3.4l1 1M11.6 11.6l1 1M3.4 12.6l1-1M11.6 4.4l1-1"/></g></symbol>
+  <symbol id="i-clock" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="6"/><path d="M8 4.6V8l2.3 1.5"/></g></symbol>
+  <symbol id="i-star" viewBox="0 0 16 16"><path d="m8 1.8 1.9 4 4.3.5-3.2 3 .9 4.3L8 11.4l-3.9 2.2.9-4.3-3.2-3 4.3-.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 16 16"><path d="M2.5 4.2h11M6.2 4.2V2.5h3.6v1.7M4 4.2l.7 9.3h6.6l.7-9.3" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+</svg>
 <header>
   <h1><span>⬢</span> Xray Checker</h1>
   <div class="tabs" id="tabs"></div>
   <div class="spacer"></div>
-  <button class="btn primary" id="runSel">Проверить</button>
-  <button class="btn" id="runAll">Все цели</button>
-  <button class="btn" id="reload">Обновить подписку</button>
-  <button class="btn" id="report">Сформировать отчёт</button>
-  <button class="btn" id="exportMd" title="Серверы с текущими фильтрами — в Markdown для Telegram">Экспорт MD</button>
-  <button class="btn" id="theme" title="Светлая / тёмная тема"></button>
+  <div class="actions">
+    <button class="btn primary" id="runSel" title="Проверить все серверы по выбранной цели"><svg class="i"><use href="#i-play"/></svg>Проверить</button>
+    <button class="btn" id="runAll" title="Проверить все серверы по всем целям"><svg class="i"><use href="#i-layers"/></svg>Все цели</button>
+    <div class="tools">
+      <button class="btn ghost" id="reload" title="Обновить подписку"><svg class="i"><use href="#i-refresh"/></svg><span class="l">Обновить подписку</span></button>
+      <button class="btn ghost" id="report" title="Сформировать отчёт о недоступных"><svg class="i"><use href="#i-alert"/></svg><span class="l">Отчёт</span></button>
+      <button class="btn ghost" id="exportMd" title="Серверы с текущими фильтрами — в Markdown для Telegram"><svg class="i"><use href="#i-down"/></svg><span class="l">Экспорт MD</span></button>
+      <button class="btn ghost icon" id="theme" title="Светлая / тёмная тема" aria-label="Светлая / тёмная тема"><svg class="i theme-moon"><use href="#i-moon"/></svg><svg class="i theme-sun"><use href="#i-sun"/></svg></button>
+    </div>
+  </div>
 </header>
 <dialog id="reportDlg">
   <h2 id="reportTitle"></h2>
   <div class="hbar" id="mdType" hidden>Выгрузить <span class="view"><button data-t="">все</button><button data-t="ok">✓ рабочие</button><button data-t="bad">✕ нерабочие</button></span></div>
   <textarea id="reportText" readonly></textarea>
-  <div class="acts"><button class="btn" id="reportSave" hidden>Скачать .md</button><button class="btn" id="reportCopy">Копировать</button><button class="btn primary" id="reportClose">Закрыть</button></div>
+  <div class="acts"><button class="btn" id="reportSave" hidden><svg class="i"><use href="#i-down"/></svg>Скачать .md</button><button class="btn" id="reportCopy">Копировать</button><button class="btn primary" id="reportClose">Закрыть</button></div>
 </dialog>
 <div class="filters">
   <div class="frow">
@@ -259,7 +310,7 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 1
     <select id="histDays"><option value="1">24 ч</option><option value="7">7 дней</option><option value="30" selected>30 дней</option><option value="90">90 дней</option></select>
   </div>
   <div class="hscroll" id="histChecks"></div>
-  <div class="acts"><button class="btn danger" id="histClear" style="margin-right:auto">Очистить историю</button><button class="btn primary" id="histClose">Закрыть</button></div>
+  <div class="acts"><button class="btn danger push" id="histClear"><svg class="i"><use href="#i-trash"/></svg>Очистить историю</button><button class="btn primary" id="histClose">Закрыть</button></div>
 </dialog>
 <div class="err" id="err"></div>
 <div class="lhead" id="lhead"></div>
@@ -448,8 +499,8 @@ function render() {
     const cls = `cell ${grade(target, r)}`, tip = title(n);
     if (el.className !== cls) el.className = cls;
     if (el.title !== tip) el.title = tip;
-    const html = `<button class="hist" data-name="${esc(n.name)}" title="История проверок">⏱</button>
-      <button class="star ${watched.has(n.name) ? 'on' : ''}" data-name="${esc(n.name)}" title="Фоновая проверка">${watched.has(n.name) ? '★' : '☆'}</button>
+    const html = `<button class="ibtn hist" data-name="${esc(n.name)}" title="История проверок"><svg><use href="#i-clock"/></svg></button>
+      <button class="ibtn star ${watched.has(n.name) ? 'on' : ''}" data-name="${esc(n.name)}" title="Фоновая проверка"><svg><use href="#i-star"/></svg></button>
       <div class="name">${nameHtml(n.name)}</div>
       <div class="proto"><span class="p">${esc(n.protocol)}</span> · ${esc(n.network)} · ${esc(n.security)} · ${esc(n.address)}</div>
       ${mainVal(target, r)}
@@ -487,14 +538,13 @@ async function check(targets, ids) {
 const themeBtn = $('#theme');
 const setTheme = t => {
   if (t === 'light') document.documentElement.dataset.theme = 'light'; else delete document.documentElement.dataset.theme;
-  themeBtn.textContent = t === 'light' ? '☾' : '☀';
   try { localStorage.setItem('theme', t); } catch (e) {}
 };
 setTheme(document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
 themeBtn.onclick = () => setTheme(document.documentElement.dataset.theme === 'light' ? 'dark' : 'light');
-$('#view').onclick = e => { const v = e.target.dataset.v; if (v) { view = v; localStorage.setItem('view', v); render(); } };
+$('#view').onclick = e => { const v = e.target.closest('button')?.dataset.v; if (v) { view = v; localStorage.setItem('view', v); render(); } };
 $('#fStatus').onclick = e => { const b = e.target.closest('button'); if (b) { status = b.dataset.s; localStorage.setItem('status', status); render(); } };
-$('#tabs').onclick = e => { const k = e.target.dataset.k; if (k) { target = k; localStorage.setItem('target', k); render(); } };
+$('#tabs').onclick = e => { const k = e.target.closest('button')?.dataset.k; if (k) { target = k; localStorage.setItem('target', k); render(); } };
 $('#grid').onclick = async e => {
   const h = e.target.closest('.hist');
   if (h) return openHistory(h.dataset.name);
@@ -508,9 +558,11 @@ $('#grid').onclick = async e => {
 $('#runSel').onclick = () => check([target]);
 $('#runAll').onclick = () => check(Object.keys(S.targets));
 $('#reload').onclick = async e => {
-  e.target.disabled = true; e.target.textContent = 'Загрузка…';
-  await fetch('/api/reload', { method: 'POST' });
-  e.target.disabled = false; e.target.textContent = 'Обновить подписку'; refresh();
+  const b = e.currentTarget, l = b.querySelector('.l');
+  b.disabled = true; b.classList.add('busy'); l.textContent = 'Загрузка…';
+  try { await fetch('/api/reload', { method: 'POST' }); } finally {
+    b.disabled = false; b.classList.remove('busy'); l.textContent = 'Обновить подписку'; refresh();
+  }
 };
 $('#report').onclick = () => {
   if (!S) return;
